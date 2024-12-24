@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 
+#[cfg(test)]
 mod tests;
 
 #[derive(Debug)]
@@ -78,13 +79,13 @@ impl<'a> TreeGrid<'a> {
         let left = (begin, split);
         let right = (split, end);
 
-        return SliceCandidate {
+        SliceCandidate {
             col,
             split,
             index,
             left,
             right,
-        };
+        }
     }
 
     fn refine_candidate(&self, slice_candidate: SliceCandidate) -> (f32, f32, RefineCandidate) {
@@ -107,7 +108,7 @@ impl<'a> TreeGrid<'a> {
         let leaves: Vec<Array1<usize>> = dims
             .into_iter()
             .multi_cartesian_product()
-            .map(|vec| Array1::from(vec)) // Convert each Vec<usize> to Array1<usize>
+            .map(Array1::from) // Convert each Vec<usize> to Array1<usize>
             .collect();
 
         let [mut n_a, mut n_b, mut m_a, mut m_b] = [0.0; 4];
@@ -191,7 +192,7 @@ impl<'a> TreeGrid<'a> {
             curr_leaf_points_idx,
         };
 
-        return (err_new, err_old, refine_candidate);
+        (err_new, err_old, refine_candidate)
     }
 
     pub fn slice_and_refine_candidate(
