@@ -1,5 +1,5 @@
 [package]
-name = "rpf-rust"
+name = "mpf-rust"
 version = "0.1.0"
 edition = "2021"
 
