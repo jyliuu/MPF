@@ -1,3 +1,2 @@
-
 mod fitter;
-mod model;
+pub mod model;
