@@ -1,3 +1,5 @@
+use ndarray::{Array1, Array2};
+
 use super::*;
 
 fn setup_data() -> (Array2<f32>, Array1<f32>) {
@@ -15,7 +17,7 @@ fn setup_data() -> (Array2<f32>, Array1<f32>) {
 #[test]
 fn test_tree_grid_refine_candidate() {
     let (x, y) = setup_data();
-    let tree_grid = TreeGrid::new(&x, &y);
+    let tree_grid = TreeGridFitter::new(&x, &y);
     let (_, _, refine_candidate) = tree_grid.slice_and_refine_candidate(0, 1.0);
     assert_eq!(refine_candidate.update_a, 0.5);
     assert_eq!(refine_candidate.update_b, 1.5);
@@ -24,7 +26,7 @@ fn test_tree_grid_refine_candidate() {
 #[test]
 fn test_tree_grid_slice_and_refine() {
     let (x, y) = setup_data();
-    let mut tree_grid = TreeGrid::new(&x, &y);
+    let mut tree_grid = TreeGridFitter::new(&x, &y);
     tree_grid.slice_and_refine(0, 1.0);
     assert_eq!(tree_grid.grid_values[0], vec![0.5, 1.5]);
     assert_eq!(tree_grid.splits[0], vec![1.0]);
@@ -38,7 +40,7 @@ fn test_tree_grid_slice_and_refine() {
 #[test]
 fn test_tree_grid_fit_and_predict() {
     let (x, y) = setup_data();
-    let mut tree_grid = TreeGrid::new(&x, &y);
+    let mut tree_grid = TreeGridFitter::new(&x, &y);
     tree_grid.slice_and_refine(0, 1.0);
     tree_grid.slice_and_refine(1, 1.0);
 
