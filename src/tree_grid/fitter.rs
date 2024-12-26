@@ -27,13 +27,13 @@ pub struct SliceCandidate {
 
 #[derive(Debug)]
 pub struct RefineCandidate {
-    col: usize,
-    split: f32,
+    pub col: usize,
+    pub split: f32,
     index: usize,
     left: (f32, f32),
     right: (f32, f32),
-    update_a: f32,
-    update_b: f32,
+    pub update_a: f32,
+    pub update_b: f32,
     a_points_idx: Vec<usize>,
     b_points_idx: Vec<usize>,
     curr_leaf_points_idx: Vec<usize>,

@@ -1,6 +1,11 @@
+use core::f32;
+
 use super::fitter::{RefineCandidate, TreeGridFitter};
 use ndarray::{Array1, Array2, Axis};
 use rand::prelude::*;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug)]
 pub struct TreeGridParams {
@@ -18,6 +23,7 @@ pub struct TreeGrid {
     pub hyperparameters: TreeGridParams,
 }
 
+#[derive(Debug)]
 pub struct FitResult {
     pub err: f32,
     pub residuals: Array1<f32>,
@@ -57,6 +63,7 @@ impl TreeGrid {
 
     pub fn fit(&mut self, x: &Array2<f32>, y: &Array1<f32>) -> FitResult {
         let mut fitter = TreeGridFitter::new(x, y);
+        let mean_err = fitter.residuals.pow2().mean().unwrap();
         let mut rng = thread_rng();
 
         for _ in 0..self.hyperparameters.n_iter {
@@ -68,36 +75,38 @@ impl TreeGrid {
                 .map(|_| rng.gen_range(0..x.nrows()))
                 .collect();
 
-            let col_idx: Vec<usize> = (0..n_cols_to_sample)
-                .map(|_| rng.gen_range(0..x.ncols()))
-                .collect();
+            let mut possible_indices: Vec<usize> = (0..x.ncols()).collect();
+            possible_indices.shuffle(&mut rng);
+
+            let col_idx = possible_indices[0..n_cols_to_sample].to_vec();
 
             let mut best_candidate: Option<RefineCandidate> = None;
-            let best_err = f32::INFINITY;
+            let mut best_err_diff = f32::NEG_INFINITY;
             for col in &col_idx {
                 for idx in &split_idx {
-                    println!("col: {}, idx: {}", col, idx);
+                    let split = x[[*idx, *col]];
                     let (err_new, err_old, refine_candidate) =
-                        fitter.slice_and_refine_candidate(*col, *idx as f32);
+                        fitter.slice_and_refine_candidate(*col, split);
 
-                    if err_old - err_new < best_err {
+                    let err_diff = err_old - err_new;
+                    if err_diff > best_err_diff {
                         best_candidate = Some(refine_candidate);
+                        best_err_diff = err_diff;
                     }
                 }
             }
 
-            println!("Error of best candidate: {:?}", best_err);
-            if let Some(refine_candidate) = best_candidate {
-                fitter.update_tree(refine_candidate);
+            if let Some(update_candidate) = best_candidate {
+                fitter.update_tree(update_candidate);
             }
         }
 
-        let err = fitter.residuals.mapv(|r| r * r).sum();
+        let err = fitter.residuals.pow2().mean().unwrap();
         self.splits = fitter.splits;
         self.intervals = fitter.intervals;
         self.grid_values = fitter.grid_values;
         self.is_fitted = true;
-
+        println!("Mean error: {}", mean_err);
         FitResult {
             err,
             residuals: fitter.residuals,
