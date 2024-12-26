@@ -152,8 +152,11 @@ impl<'a> TreeGridFitter<'a> {
         let update_a = if n_a == 0.0 { 1.0 } else { m_a / n_a + 1.0 };
         let update_b = if n_b == 0.0 { 1.0 } else { m_b / n_b + 1.0 };
 
-        let err_old =
-            self.residuals.iter().map(|x| x.powi(2)).sum::<f32>() / self.residuals.len() as f32;
+        let err_old = self
+            .residuals
+            .select(Axis(0), &curr_leaf_points_idx)
+            .pow2()
+            .sum();
 
         let (a_points_idx, b_points_idx): (Vec<_>, Vec<_>) = curr_points
             .index_axis(Axis(1), col)
