@@ -106,7 +106,6 @@ impl TreeGrid {
         self.intervals = fitter.intervals;
         self.grid_values = fitter.grid_values;
         self.is_fitted = true;
-        println!("Mean error: {}", mean_err);
         FitResult {
             err,
             residuals: fitter.residuals,

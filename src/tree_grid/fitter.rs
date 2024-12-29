@@ -255,22 +255,4 @@ impl<'a> TreeGridFitter<'a> {
         let (_, _, refine_candidate) = self.slice_and_refine_candidate(col, split);
         self.update_tree(refine_candidate);
     }
-
-    pub fn predict(&self, x: &Array2<f32>) -> Array1<f32> {
-        let mut y_hat = Array1::zeros(x.nrows());
-        for (i, row) in x.axis_iter(Axis(0)).enumerate() {
-            let mut prod = 1.0;
-            for (j, &val) in row.iter().enumerate() {
-                let index = self.splits[j]
-                    .iter()
-                    .position(|&x| x >= val)
-                    .unwrap_or(self.splits[j].len());
-                prod *= self.grid_values[j][index];
-            }
-            y_hat[i] = prod;
-        }
-        y_hat
-    }
-
-    pub fn fit(&mut self) {}
 }
