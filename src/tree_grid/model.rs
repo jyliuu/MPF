@@ -52,7 +52,7 @@ impl TreeGrid {
             for (j, &val) in row.iter().enumerate() {
                 let index = self.splits[j]
                     .iter()
-                    .position(|&x| x >= val)
+                    .position(|&x| val < x)
                     .unwrap_or(self.splits[j].len());
                 prod *= self.grid_values[j][index];
             }

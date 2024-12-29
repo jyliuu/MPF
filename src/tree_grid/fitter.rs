@@ -72,7 +72,7 @@ impl<'a> TreeGridFitter<'a> {
 
         let index = splits
             .iter()
-            .position(|&x| x >= split)
+            .position(|&x| split < x)
             .unwrap_or(splits.len());
 
         let (begin, end) = intervals[index];
@@ -162,7 +162,7 @@ impl<'a> TreeGridFitter<'a> {
             .index_axis(Axis(1), col)
             .indexed_iter()
             .map(|(i, &x)| {
-                if x <= split {
+                if x < split {
                     (curr_leaf_points_idx[i], true)
                 } else {
                     (curr_leaf_points_idx[i], false)
