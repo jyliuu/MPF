@@ -1,3 +1,5 @@
+use std::vec;
+
 use itertools::Itertools;
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 
@@ -50,8 +52,10 @@ impl<'a> TreeGridFitter<'a> {
 
         let mean = labels.mean().unwrap();
         let residuals = y.clone() - mean;
-        let init_value: f32 = f32::max(mean, 1.).powf(1.0 / x.ncols() as f32);
-        let grid_values = vec![vec![init_value]; x.ncols()];
+        let init_value: f32 = mean.abs().powf(1.0 / x.ncols() as f32);
+        let sign = mean.signum();
+        let mut grid_values = vec![vec![init_value]; x.ncols() - 1];
+        grid_values.insert(0, vec![sign * init_value]);
         let y_hat = Array1::from_vec(vec![mean; x.nrows()]);
 
         TreeGridFitter {
@@ -208,11 +212,12 @@ impl<'a> TreeGridFitter<'a> {
     }
 
     fn update_leaf_points(&mut self, dim: &usize, index: &usize, leaf_points_b: &[usize]) {
-        for mut x in self.leaf_points.axis_iter_mut(Axis(0)) {
+        self.leaf_points.axis_iter_mut(Axis(0)).for_each(|mut x| {
             if x[*dim] > *index {
                 x[*dim] += 1;
             }
-        }
+        });
+
         for &i in leaf_points_b {
             self.leaf_points[(i, *dim)] += 1;
         }
@@ -232,8 +237,9 @@ impl<'a> TreeGridFitter<'a> {
             curr_leaf_points_idx: _,
         } = refine_candidate;
 
-        self.grid_values[col][index] = update_a;
-        self.grid_values[col].insert(index + 1, update_b);
+        let old_grid_value = self.grid_values[col][index];
+        self.grid_values[col][index] *= update_a;
+        self.grid_values[col].insert(index + 1, old_grid_value * update_b);
 
         self.splits[col].insert(index, split);
         self.intervals[col][index] = left;
