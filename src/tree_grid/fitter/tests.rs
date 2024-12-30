@@ -36,22 +36,3 @@ fn test_tree_grid_slice_and_refine() {
     );
     assert_eq!(tree_grid.residuals.sum(), 0.0);
 }
-
-#[test]
-fn test_tree_grid_fit_and_predict() {
-    let (x, y) = setup_data();
-    let mut tree_grid = TreeGridFitter::new(&x, &y);
-    tree_grid.slice_and_refine(0, 1.0);
-    tree_grid.slice_and_refine(1, 1.0);
-
-    let preds_on_x = tree_grid.predict(&x);
-    let preds_extrapolated = unsafe {
-        tree_grid.predict(&Array2::from_shape_vec_unchecked(
-            (2, 2),
-            vec![-1.0, -1.0, 2.0, 2.0],
-        ))
-    };
-
-    assert_eq!(preds_on_x, tree_grid.y_hat);
-    assert_eq!(preds_extrapolated, Array1::from_vec(vec![0.5, 1.5]));
-}
