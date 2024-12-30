@@ -31,7 +31,7 @@ fn setup_data() -> (Array2<f32>, Array1<f32>) {
 }
 
 #[test]
-fn test_model_fit_and_predict() {
+fn test_model_fit() {
     let (x, y) = setup_data();
     let mut tree_grid = TreeGrid::new(TreeGridParams {
         n_iter: 50,
@@ -41,4 +41,20 @@ fn test_model_fit_and_predict() {
     let fit_result = tree_grid.fit(&x, &y);
 
     println!("Error: {:?}", fit_result.err);
+}
+
+#[test]
+fn test_model_predict() {
+    let (x, y) = setup_data();
+    let mut tree_grid = TreeGrid::new(TreeGridParams {
+        n_iter: 50,
+        split_try: 10,
+        colsample_bytree: 1.0,
+    });
+    let fit_result = tree_grid.fit(&x, &y);
+
+    let y_hat = tree_grid.predict(&x);
+    let diff = &fit_result.y_hat - &y_hat;
+
+    assert!(diff.iter().all(|&x| x < 1e-6));
 }
