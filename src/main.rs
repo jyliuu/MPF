@@ -1,8 +1,8 @@
 use csv::ReaderBuilder;
-use mpf_rust::tree_grid::model;
+use mpf::tree_grid::model;
 use ndarray::{Array1, Array2};
 
-fn setup_data() -> (Array2<f32>, Array1<f32>) {
+fn setup_data() -> (Array2<f64>, Array1<f64>) {
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
         .from_path("src/tree_grid/model/dat.csv")
@@ -13,9 +13,9 @@ fn setup_data() -> (Array2<f32>, Array1<f32>) {
 
     for result in rdr.records() {
         let record = result.expect("Failed to read record");
-        let y: f32 = record[0].parse().expect("Failed to parse y");
-        let x1: f32 = record[1].parse().expect("Failed to parse x1");
-        let x2: f32 = record[2].parse().expect("Failed to parse x2");
+        let y: f64 = record[0].parse().expect("Failed to parse y");
+        let x1: f64 = record[1].parse().expect("Failed to parse x1");
+        let x2: f64 = record[2].parse().expect("Failed to parse x2");
 
         y_data.push(y);
         x_data.push(vec![x1, x2]);
@@ -32,11 +32,13 @@ fn main() {
     println!("Running main");
     let (x, y) = setup_data();
     let mut tree_grid = model::TreeGrid::new(model::TreeGridParams {
-        n_iter: 50,
+        n_iter: 100,
         split_try: 10,
         colsample_bytree: 1.0,
     });
     let fit_result = tree_grid.fit(&x, &y);
+    let y_hat = tree_grid.predict(&x);
 
     println!("Error: {:?}", fit_result.err);
+    println!("y_hat: {:?}", y_hat);
 }
