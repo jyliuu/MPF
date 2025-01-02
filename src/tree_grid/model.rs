@@ -1,4 +1,4 @@
-use core::f32;
+use core::f64;
 
 use super::fitter::{RefineCandidate, TreeGridFitter};
 use ndarray::{Array1, Array2, Axis};
@@ -11,23 +11,23 @@ mod tests;
 pub struct TreeGridParams {
     pub n_iter: usize,
     pub split_try: usize,
-    pub colsample_bytree: f32,
+    pub colsample_bytree: f64,
 }
 
 #[derive(Debug)]
 pub struct TreeGrid {
     is_fitted: bool,
-    splits: Vec<Vec<f32>>,
-    intervals: Vec<Vec<(f32, f32)>>,
-    grid_values: Vec<Vec<f32>>,
+    splits: Vec<Vec<f64>>,
+    intervals: Vec<Vec<(f64, f64)>>,
+    grid_values: Vec<Vec<f64>>,
     pub hyperparameters: TreeGridParams,
 }
 
 #[derive(Debug)]
 pub struct FitResult {
-    pub err: f32,
-    pub residuals: Array1<f32>,
-    pub y_hat: Array1<f32>,
+    pub err: f64,
+    pub residuals: Array1<f64>,
+    pub y_hat: Array1<f64>,
 }
 
 impl TreeGrid {
@@ -45,7 +45,7 @@ impl TreeGrid {
         }
     }
 
-    pub fn predict(&self, x: &Array2<f32>) -> Array1<f32> {
+    pub fn predict(&self, x: &Array2<f64>) -> Array1<f64> {
         let mut y_hat = Array1::zeros(x.nrows());
         for (i, row) in x.axis_iter(Axis(0)).enumerate() {
             let mut prod = 1.0;
@@ -61,7 +61,7 @@ impl TreeGrid {
         y_hat
     }
 
-    pub fn fit(&mut self, x: &Array2<f32>, y: &Array1<f32>) -> FitResult {
+    pub fn fit(&mut self, x: &Array2<f64>, y: &Array1<f64>) -> FitResult {
         let mut fitter = TreeGridFitter::new(x.view(), y.view());
         let mean_err = fitter.residuals.pow2().mean().unwrap();
         let mut rng = thread_rng();
@@ -69,7 +69,7 @@ impl TreeGrid {
         for _ in 0..self.hyperparameters.n_iter {
             // sample random columns to split on
             let n_cols_to_sample =
-                (self.hyperparameters.colsample_bytree * x.ncols() as f32) as usize;
+                (self.hyperparameters.colsample_bytree * x.ncols() as f64) as usize;
 
             let split_idx: Vec<usize> = (0..self.hyperparameters.split_try)
                 .map(|_| rng.gen_range(0..x.nrows()))
@@ -81,7 +81,7 @@ impl TreeGrid {
             let col_idx = possible_indices[0..n_cols_to_sample].to_vec();
 
             let mut best_candidate: Option<RefineCandidate> = None;
-            let mut best_err_diff = f32::NEG_INFINITY;
+            let mut best_err_diff = f64::NEG_INFINITY;
             for col in &col_idx {
                 for idx in &split_idx {
                     let split = x[[*idx, *col]];

@@ -8,50 +8,50 @@ mod tests;
 
 #[derive(Debug)]
 pub struct TreeGridFitter<'a> {
-    pub splits: Vec<Vec<f32>>,
-    pub intervals: Vec<Vec<(f32, f32)>>,
-    pub grid_values: Vec<Vec<f32>>,
+    pub splits: Vec<Vec<f64>>,
+    pub intervals: Vec<Vec<(f64, f64)>>,
+    pub grid_values: Vec<Vec<f64>>,
     pub leaf_points: Array2<usize>,
-    pub labels: ArrayView1<'a, f32>,
-    pub x: ArrayView2<'a, f32>,
-    pub y_hat: Array1<f32>,
-    pub residuals: Array1<f32>,
+    pub labels: ArrayView1<'a, f64>,
+    pub x: ArrayView2<'a, f64>,
+    pub y_hat: Array1<f64>,
+    pub residuals: Array1<f64>,
 }
 
 #[derive(Debug)]
 pub struct SliceCandidate {
     col: usize,
-    split: f32,
+    split: f64,
     index: usize,
-    left: (f32, f32),
-    right: (f32, f32),
+    left: (f64, f64),
+    right: (f64, f64),
 }
 
 #[derive(Debug)]
 pub struct RefineCandidate {
     pub col: usize,
-    pub split: f32,
+    pub split: f64,
     index: usize,
-    left: (f32, f32),
-    right: (f32, f32),
-    pub update_a: f32,
-    pub update_b: f32,
+    left: (f64, f64),
+    right: (f64, f64),
+    pub update_a: f64,
+    pub update_b: f64,
     a_points_idx: Vec<usize>,
     b_points_idx: Vec<usize>,
     curr_leaf_points_idx: Vec<usize>,
 }
 
 impl<'a> TreeGridFitter<'a> {
-    pub fn new(x: ArrayView2<'a, f32>, y: ArrayView1<'a, f32>) -> Self {
+    pub fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
         let labels = y;
         let x = x;
         let leaf_points = Array2::zeros((x.nrows(), x.ncols()));
         let splits = vec![vec![]; x.ncols()];
-        let intervals = vec![vec![(f32::NEG_INFINITY, f32::INFINITY)]; x.ncols()];
+        let intervals = vec![vec![(f64::NEG_INFINITY, f64::INFINITY)]; x.ncols()];
 
         let mean = labels.mean().unwrap();
         let residuals = y.clone().to_owned() - mean;
-        let init_value: f32 = mean.abs().powf(1.0 / x.ncols() as f32);
+        let init_value: f64 = mean.abs().powf(1.0 / x.ncols() as f64);
         let sign = mean.signum();
         let mut grid_values = vec![vec![init_value]; x.ncols() - 1];
         grid_values.insert(0, vec![sign * init_value]);
@@ -69,7 +69,7 @@ impl<'a> TreeGridFitter<'a> {
         }
     }
 
-    fn slice_candidate(&self, col: usize, split: f32) -> SliceCandidate {
+    fn slice_candidate(&self, col: usize, split: f64) -> SliceCandidate {
         let splits = &self.splits[col];
         let intervals = &self.intervals[col];
 
@@ -91,7 +91,7 @@ impl<'a> TreeGridFitter<'a> {
         }
     }
 
-    fn refine_candidate(&self, slice_candidate: SliceCandidate) -> (f32, f32, RefineCandidate) {
+    fn refine_candidate(&self, slice_candidate: SliceCandidate) -> (f64, f64, RefineCandidate) {
         let SliceCandidate {
             col,
             split,
@@ -127,7 +127,7 @@ impl<'a> TreeGridFitter<'a> {
         let curr_points = self.x.select(Axis(0), &curr_leaf_points_idx);
         // TODO: effectivize this loop by not looping observations only once
         for leaf in leaves {
-            let v: f32 = leaf
+            let v: f64 = leaf
                 .indexed_iter()
                 .map(|(i, &idx)| self.grid_values[i][idx])
                 .product();
@@ -146,10 +146,10 @@ impl<'a> TreeGridFitter<'a> {
                 })
                 .partition(|(_, is_a)| *is_a);
 
-            n_a += v.powf(2.0) * resids_a.len() as f32;
-            n_b += v.powf(2.0) * resids_b.len() as f32;
-            m_a += v * resids_a.into_iter().map(|(r, _)| r).sum::<f32>();
-            m_b += v * resids_b.into_iter().map(|(r, _)| r).sum::<f32>();
+            n_a += v.powf(2.0) * resids_a.len() as f64;
+            n_b += v.powf(2.0) * resids_b.len() as f64;
+            m_a += v * resids_a.into_iter().map(|(r, _)| r).sum::<f64>();
+            m_b += v * resids_b.into_iter().map(|(r, _)| r).sum::<f64>();
         }
 
         let update_a = if n_a == 0.0 { 1.0 } else { m_a / n_a + 1.0 };
@@ -176,12 +176,12 @@ impl<'a> TreeGridFitter<'a> {
         let new_resid_a = a_points_idx
             .iter()
             .map(|(i, _)| (self.labels[*i] - self.y_hat[*i] * update_a).powf(2.0))
-            .sum::<f32>();
+            .sum::<f64>();
 
         let new_resid_b = b_points_idx
             .iter()
             .map(|(i, _)| (self.labels[*i] - self.y_hat[*i] * update_b).powf(2.0))
-            .sum::<f32>();
+            .sum::<f64>();
 
         let err_new = new_resid_a + new_resid_b;
 
@@ -204,8 +204,8 @@ impl<'a> TreeGridFitter<'a> {
     pub fn slice_and_refine_candidate(
         &self,
         col: usize,
-        split: f32,
-    ) -> (f32, f32, RefineCandidate) {
+        split: f64,
+    ) -> (f64, f64, RefineCandidate) {
         let slice_candidate = self.slice_candidate(col, split);
         self.refine_candidate(slice_candidate)
     }
@@ -256,7 +256,7 @@ impl<'a> TreeGridFitter<'a> {
         }
     }
 
-    fn slice_and_refine(&mut self, col: usize, split: f32) {
+    fn slice_and_refine(&mut self, col: usize, split: f64) {
         let (_, _, refine_candidate) = self.slice_and_refine_candidate(col, split);
         self.update_tree(refine_candidate);
     }

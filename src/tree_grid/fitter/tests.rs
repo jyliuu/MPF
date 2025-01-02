@@ -2,7 +2,7 @@ use ndarray::{Array1, Array2};
 
 use super::*;
 
-fn setup_data() -> (Array2<f32>, Array1<f32>) {
+fn setup_data() -> (Array2<f64>, Array1<f64>) {
     let x = Array2::from_shape_vec(
         (6, 2),
         vec![0.1, 0.2, 0.3, 0.5, 0.7, 0.6, 1.1, 1.2, 1.3, 1.5, 1.7, 1.6],
@@ -32,7 +32,7 @@ fn test_tree_grid_slice_and_refine() {
     assert_eq!(tree_grid.splits[0], vec![1.0]);
     assert_eq!(
         tree_grid.intervals[0],
-        vec![(f32::NEG_INFINITY, 1.0), (1.0, f32::INFINITY)]
+        vec![(f64::NEG_INFINITY, 1.0), (1.0, f64::INFINITY)]
     );
     assert_eq!(tree_grid.residuals.sum(), 0.0);
 }
