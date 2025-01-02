@@ -62,7 +62,7 @@ impl TreeGrid {
     }
 
     pub fn fit(&mut self, x: &Array2<f32>, y: &Array1<f32>) -> FitResult {
-        let mut fitter = TreeGridFitter::new(x, y);
+        let mut fitter = TreeGridFitter::new(x.view(), y.view());
         let mean_err = fitter.residuals.pow2().mean().unwrap();
         let mut rng = thread_rng();
 

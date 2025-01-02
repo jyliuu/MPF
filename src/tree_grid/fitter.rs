@@ -42,16 +42,15 @@ pub struct RefineCandidate {
 }
 
 impl<'a> TreeGridFitter<'a> {
-    pub fn new(x: &'a Array2<f32>, y: &'a Array1<f32>) -> Self {
-        let labels = y.view();
-
-        let x = x.view();
+    pub fn new(x: ArrayView2<'a, f32>, y: ArrayView1<'a, f32>) -> Self {
+        let labels = y;
+        let x = x;
         let leaf_points = Array2::zeros((x.nrows(), x.ncols()));
         let splits = vec![vec![]; x.ncols()];
         let intervals = vec![vec![(f32::NEG_INFINITY, f32::INFINITY)]; x.ncols()];
 
         let mean = labels.mean().unwrap();
-        let residuals = y.clone() - mean;
+        let residuals = y.clone().to_owned() - mean;
         let init_value: f32 = mean.abs().powf(1.0 / x.ncols() as f32);
         let sign = mean.signum();
         let mut grid_values = vec![vec![init_value]; x.ncols() - 1];
