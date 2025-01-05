@@ -27,7 +27,8 @@ fn test_tree_grid_refine_candidate() {
 fn test_tree_grid_slice_and_refine() {
     let (x, y) = setup_data();
     let mut tree_grid = TreeGridFitter::new(x.view(), y.view());
-    tree_grid.slice_and_refine(0, 1.0);
+    let (_, _, refine_candidate) = tree_grid.slice_and_refine_candidate(0, 1.0);
+    tree_grid.update_tree(refine_candidate);
     assert_eq!(tree_grid.grid_values[0], vec![0.5, 1.5]);
     assert_eq!(tree_grid.splits[0], vec![1.0]);
     assert_eq!(
