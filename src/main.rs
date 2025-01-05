@@ -36,8 +36,8 @@ fn main() {
         split_try: 10,
         colsample_bytree: 1.0,
     });
-    let fit_result = tree_grid.fit(&x, &y);
-    let y_hat = tree_grid.predict(&x);
+    let fit_result = tree_grid.fit(x.view(), y.view());
+    let y_hat = tree_grid.predict(x.view());
 
     println!("Error: {:?}", fit_result.err);
     println!("y_hat: {:?}", y_hat);

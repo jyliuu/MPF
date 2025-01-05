@@ -1,13 +1,13 @@
 use core::f64;
 
 use super::fitter::{RefineCandidate, TreeGridFitter};
-use ndarray::{Array1, Array2, Axis};
+use ndarray::{Array1, ArrayView1, ArrayView2, Axis};
 use rand::prelude::*;
 
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TreeGridParams {
     pub n_iter: usize,
     pub split_try: usize,
@@ -16,10 +16,10 @@ pub struct TreeGridParams {
 
 #[derive(Debug)]
 pub struct TreeGrid {
-    is_fitted: bool,
-    splits: Vec<Vec<f64>>,
-    intervals: Vec<Vec<(f64, f64)>>,
-    grid_values: Vec<Vec<f64>>,
+    pub is_fitted: bool,
+    pub splits: Vec<Vec<f64>>,
+    pub intervals: Vec<Vec<(f64, f64)>>,
+    pub grid_values: Vec<Vec<f64>>,
     pub hyperparameters: TreeGridParams,
 }
 
@@ -45,7 +45,7 @@ impl TreeGrid {
         }
     }
 
-    pub fn predict(&self, x: &Array2<f64>) -> Array1<f64> {
+    pub fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
         let mut y_hat = Array1::zeros(x.nrows());
         for (i, row) in x.axis_iter(Axis(0)).enumerate() {
             let mut prod = 1.0;
@@ -61,8 +61,8 @@ impl TreeGrid {
         y_hat
     }
 
-    pub fn fit(&mut self, x: &Array2<f64>, y: &Array1<f64>) -> FitResult {
-        let mut fitter = TreeGridFitter::new(x.view(), y.view());
+    pub fn fit<'a>(&mut self, x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> FitResult {
+        let mut fitter = TreeGridFitter::new(x, y);
         let mean_err = fitter.residuals.pow2().mean().unwrap();
         let mut rng = thread_rng();
 

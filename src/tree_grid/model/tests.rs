@@ -38,7 +38,7 @@ fn test_model_fit() {
         split_try: 10,
         colsample_bytree: 1.0,
     });
-    let fit_result = tree_grid.fit(&x, &y);
+    let fit_result = tree_grid.fit(x.view(), y.view());
 
     println!("Error: {:?}", fit_result.err);
 }
@@ -51,9 +51,9 @@ fn test_model_predict() {
         split_try: 10,
         colsample_bytree: 1.0,
     });
-    let fit_result = tree_grid.fit(&x, &y);
+    let fit_result = tree_grid.fit(x.view(), y.view());
 
-    let y_hat = tree_grid.predict(&x);
+    let y_hat = tree_grid.predict(x.view());
     let diff = &fit_result.y_hat - &y_hat;
 
     assert!(diff.iter().all(|&x| x < 1e-6));
