@@ -1,8 +1,7 @@
 use core::f64;
 
-use super::fitter::{RefineCandidate, TreeGridFitter};
+use super::tree_grid_fitter::TreeGridFitter;
 use ndarray::{Array1, ArrayView1, ArrayView2, Axis};
-use rand::prelude::*;
 
 #[cfg(test)]
 mod tests;
@@ -63,51 +62,14 @@ impl TreeGrid {
 
     pub fn fit<'a>(&mut self, x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> FitResult {
         let mut fitter = TreeGridFitter::new(x, y);
-        let mean_err = fitter.residuals.pow2().mean().unwrap();
-        let mut rng = thread_rng();
+        let result = fitter.fit(self.hyperparameters.clone());
 
-        for _ in 0..self.hyperparameters.n_iter {
-            // sample random columns to split on
-            let n_cols_to_sample =
-                (self.hyperparameters.colsample_bytree * x.ncols() as f64) as usize;
-
-            let split_idx: Vec<usize> = (0..self.hyperparameters.split_try)
-                .map(|_| rng.gen_range(0..x.nrows()))
-                .collect();
-
-            let mut possible_indices: Vec<usize> = (0..x.ncols()).collect();
-            possible_indices.shuffle(&mut rng);
-
-            let col_idx = possible_indices[0..n_cols_to_sample].to_vec();
-
-            let mut best_candidate: Option<RefineCandidate> = None;
-            let mut best_err_diff = f64::NEG_INFINITY;
-            for col in &col_idx {
-                for idx in &split_idx {
-                    let split = x[[*idx, *col]];
-                    let (err_new, err_old, refine_candidate) =
-                        fitter.slice_and_refine_candidate(*col, split);
-
-                    let err_diff = err_old - err_new;
-                    if err_diff > best_err_diff {
-                        best_candidate = Some(refine_candidate);
-                        best_err_diff = err_diff;
-                    }
-                }
-            }
-
-            if let Some(update_candidate) = best_candidate {
-                fitter.update_tree(update_candidate);
-            }
-        }
-
-        let err = fitter.residuals.pow2().mean().unwrap();
         self.splits = fitter.splits;
         self.intervals = fitter.intervals;
         self.grid_values = fitter.grid_values;
         self.is_fitted = true;
         FitResult {
-            err,
+            err: result,
             residuals: fitter.residuals,
             y_hat: fitter.y_hat,
         }
