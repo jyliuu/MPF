@@ -1,3 +1,3 @@
-mod fitter;
+mod tree_grid_fitter;
 pub mod model;
-pub mod model_py;
+pub mod py_bindings;

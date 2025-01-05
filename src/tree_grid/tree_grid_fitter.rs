@@ -1,0 +1,302 @@
+use std::vec;
+
+use itertools::Itertools;
+use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
+use rand::{seq::SliceRandom, Rng};
+
+use super::model::TreeGridParams;
+
+#[cfg(test)]
+mod tests;
+
+#[derive(Debug)]
+pub struct TreeGridFitter<'a> {
+    pub splits: Vec<Vec<f64>>,
+    pub intervals: Vec<Vec<(f64, f64)>>,
+    pub grid_values: Vec<Vec<f64>>,
+    pub leaf_points: Array2<usize>,
+    pub labels: ArrayView1<'a, f64>,
+    pub x: ArrayView2<'a, f64>,
+    pub y_hat: Array1<f64>,
+    pub residuals: Array1<f64>,
+}
+
+#[derive(Debug)]
+pub struct SliceCandidate {
+    col: usize,
+    split: f64,
+    index: usize,
+    left: (f64, f64),
+    right: (f64, f64),
+}
+
+#[derive(Debug)]
+pub struct RefineCandidate {
+    pub col: usize,
+    pub split: f64,
+    index: usize,
+    left: (f64, f64),
+    right: (f64, f64),
+    pub update_a: f64,
+    pub update_b: f64,
+    a_points_idx: Vec<usize>,
+    b_points_idx: Vec<usize>,
+    curr_leaf_points_idx: Vec<usize>,
+}
+
+impl<'a> TreeGridFitter<'a> {
+    pub fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
+        let labels = y;
+        let x = x;
+        let leaf_points = Array2::zeros((x.nrows(), x.ncols()));
+        let splits = vec![vec![]; x.ncols()];
+        let intervals = vec![vec![(f64::NEG_INFINITY, f64::INFINITY)]; x.ncols()];
+
+        let mean = labels.mean().unwrap();
+        let residuals = y.clone().to_owned() - mean;
+        let init_value: f64 = mean.abs().powf(1.0 / x.ncols() as f64);
+        let sign = mean.signum();
+        let mut grid_values = vec![vec![init_value]; x.ncols() - 1];
+        grid_values.insert(0, vec![sign * init_value]);
+        let y_hat = Array1::from_vec(vec![mean; x.nrows()]);
+
+        TreeGridFitter {
+            splits,
+            intervals,
+            grid_values,
+            leaf_points,
+            labels,
+            x,
+            y_hat,
+            residuals,
+        }
+    }
+
+    fn slice_candidate(&self, col: usize, split: f64) -> SliceCandidate {
+        let splits = &self.splits[col];
+        let intervals = &self.intervals[col];
+
+        let index = splits
+            .iter()
+            .position(|&x| split < x)
+            .unwrap_or(splits.len());
+
+        let (begin, end) = intervals[index];
+        let left = (begin, split);
+        let right = (split, end);
+
+        SliceCandidate {
+            col,
+            split,
+            index,
+            left,
+            right,
+        }
+    }
+
+    fn refine_candidate(&self, slice_candidate: SliceCandidate) -> (f64, f64, RefineCandidate) {
+        let SliceCandidate {
+            col,
+            split,
+            index,
+            left,
+            right,
+        } = slice_candidate;
+
+        let mut dims = vec![];
+        for dim in 0..self.x.ncols() {
+            dims.push(if dim == col {
+                vec![index]
+            } else {
+                (0..self.intervals[dim].len()).collect()
+            });
+        }
+        let leaves: Vec<Array1<usize>> = dims
+            .into_iter()
+            .multi_cartesian_product()
+            .map(Array1::from) // Convert each Vec<usize> to Array1<usize>
+            .collect();
+
+        let [mut n_a, mut n_b, mut m_a, mut m_b] = [0.0; 4];
+
+        let curr_leaf_points_idx: Vec<usize> = self
+            .leaf_points
+            .index_axis(Axis(1), col)
+            .indexed_iter()
+            .filter(|(_, &x)| x == index)
+            .map(|(i, _)| i)
+            .collect();
+
+        let curr_points = self.x.select(Axis(0), &curr_leaf_points_idx);
+        // TODO: effectivize this loop by not looping observations only once
+        for leaf in leaves {
+            let v: f64 = leaf
+                .indexed_iter()
+                .map(|(i, &idx)| self.grid_values[i][idx])
+                .product();
+
+            let (resids_a, resids_b): (Vec<_>, Vec<_>) = self
+                .leaf_points
+                .select(Axis(0), &curr_leaf_points_idx)
+                .axis_iter(Axis(0))
+                .enumerate()
+                .filter_map(|(i, row)| {
+                    if row == leaf {
+                        Some((self.residuals[i], self.x[(i, col)] < split))
+                    } else {
+                        None
+                    }
+                })
+                .partition(|(_, is_a)| *is_a);
+
+            n_a += v.powf(2.0) * resids_a.len() as f64;
+            n_b += v.powf(2.0) * resids_b.len() as f64;
+            m_a += v * resids_a.into_iter().map(|(r, _)| r).sum::<f64>();
+            m_b += v * resids_b.into_iter().map(|(r, _)| r).sum::<f64>();
+        }
+
+        let update_a = if n_a == 0.0 { 1.0 } else { m_a / n_a + 1.0 };
+        let update_b = if n_b == 0.0 { 1.0 } else { m_b / n_b + 1.0 };
+
+        let err_old = self
+            .residuals
+            .select(Axis(0), &curr_leaf_points_idx)
+            .pow2()
+            .sum();
+
+        let (a_points_idx, b_points_idx): (Vec<_>, Vec<_>) = curr_points
+            .index_axis(Axis(1), col)
+            .indexed_iter()
+            .map(|(i, &x)| {
+                if x < split {
+                    (curr_leaf_points_idx[i], true)
+                } else {
+                    (curr_leaf_points_idx[i], false)
+                }
+            })
+            .partition(|(_, is_a)| *is_a);
+
+        let new_resid_a = a_points_idx
+            .iter()
+            .map(|(i, _)| (self.labels[*i] - self.y_hat[*i] * update_a).powf(2.0))
+            .sum::<f64>();
+
+        let new_resid_b = b_points_idx
+            .iter()
+            .map(|(i, _)| (self.labels[*i] - self.y_hat[*i] * update_b).powf(2.0))
+            .sum::<f64>();
+
+        let err_new = new_resid_a + new_resid_b;
+
+        let refine_candidate = RefineCandidate {
+            col,
+            split,
+            index,
+            left,
+            right,
+            update_a,
+            update_b,
+            a_points_idx: a_points_idx.into_iter().map(|(i, _)| i).collect(),
+            b_points_idx: b_points_idx.into_iter().map(|(i, _)| i).collect(),
+            curr_leaf_points_idx,
+        };
+
+        (err_new, err_old, refine_candidate)
+    }
+
+    pub fn slice_and_refine_candidate(
+        &self,
+        col: usize,
+        split: f64,
+    ) -> (f64, f64, RefineCandidate) {
+        let slice_candidate = self.slice_candidate(col, split);
+        self.refine_candidate(slice_candidate)
+    }
+
+    fn update_leaf_points(&mut self, dim: &usize, index: &usize, leaf_points_b: &[usize]) {
+        self.leaf_points.axis_iter_mut(Axis(0)).for_each(|mut x| {
+            if x[*dim] > *index {
+                x[*dim] += 1;
+            }
+        });
+
+        for &i in leaf_points_b {
+            self.leaf_points[(i, *dim)] += 1;
+        }
+    }
+
+    pub fn update_tree(&mut self, refine_candidate: RefineCandidate) {
+        let RefineCandidate {
+            col,
+            split,
+            index,
+            left,
+            right,
+            update_a,
+            update_b,
+            a_points_idx,
+            b_points_idx,
+            curr_leaf_points_idx: _,
+        } = refine_candidate;
+
+        let old_grid_value = self.grid_values[col][index];
+        self.grid_values[col][index] *= update_a;
+        self.grid_values[col].insert(index + 1, old_grid_value * update_b);
+
+        self.splits[col].insert(index, split);
+        self.intervals[col][index] = left;
+        self.intervals[col].insert(index + 1, right);
+
+        self.update_leaf_points(&col, &index, &b_points_idx);
+
+        for &i in &a_points_idx {
+            self.y_hat[i] *= update_a;
+            self.residuals[i] = self.labels[i] - self.y_hat[i];
+        }
+        for &i in &b_points_idx {
+            self.y_hat[i] *= update_b;
+            self.residuals[i] = self.labels[i] - self.y_hat[i];
+        }
+    }
+
+    pub fn fit(&mut self, hyperparameters: TreeGridParams) -> f64 {
+        let mut rng = rand::thread_rng();
+
+        for _ in 0..hyperparameters.n_iter {
+            // sample random columns to split on
+            let n_cols_to_sample =
+                (hyperparameters.colsample_bytree * self.x.ncols() as f64) as usize;
+
+            let split_idx: Vec<usize> = (0..hyperparameters.split_try)
+                .map(|_| rng.gen_range(0..self.x.nrows()))
+                .collect();
+
+            let mut possible_indices: Vec<usize> = (0..self.x.ncols()).collect();
+            possible_indices.shuffle(&mut rng);
+
+            let col_idx = possible_indices[0..n_cols_to_sample].to_vec();
+
+            let mut best_candidate: Option<RefineCandidate> = None;
+            let mut best_err_diff = f64::NEG_INFINITY;
+            for col in &col_idx {
+                for idx in &split_idx {
+                    let split = self.x[[*idx, *col]];
+                    let (err_new, err_old, refine_candidate) =
+                        self.slice_and_refine_candidate(*col, split);
+
+                    let err_diff = err_old - err_new;
+                    if err_diff > best_err_diff {
+                        best_candidate = Some(refine_candidate);
+                        best_err_diff = err_diff;
+                    }
+                }
+            }
+
+            if let Some(update_candidate) = best_candidate {
+                self.update_tree(update_candidate);
+            }
+        }
+
+        self.residuals.pow2().mean().unwrap()
+    }
+}
