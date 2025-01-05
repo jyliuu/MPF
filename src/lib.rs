@@ -1,3 +1,4 @@
+pub mod forest;
 pub mod tree_grid;
 use pyo3::prelude::*;
 
@@ -13,7 +14,7 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 #[pymodule]
 fn mpf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sum_as_string, m)?);
-    m.add_class::<tree_grid::model_py::TreeGridPy>()?;
-    m.add_class::<tree_grid::model_py::FitResultPy>()?;
+    m.add_class::<tree_grid::py_bindings::TreeGridPy>()?;
+    m.add_class::<tree_grid::py_bindings::FitResultPy>()?;
     Ok(())
 }
