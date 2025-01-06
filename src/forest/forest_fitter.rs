@@ -4,8 +4,11 @@ use rand::seq::SliceRandom;
 use rand::Rng;
 use std::collections::{BTreeSet, HashMap};
 
-use crate::tree_grid::tree_grid_fitter::{
-    find_refine_candidate, find_slice_candidate, RefineCandidate, TreeGridFitter,
+use crate::{
+    tree_grid::tree_grid_fitter::{
+        find_refine_candidate, find_slice_candidate, RefineCandidate, TreeGridFitter,
+    },
+    FitResult,
 };
 
 use super::mpf::MPF;
@@ -120,7 +123,7 @@ impl<'a> ForestFitter<'a> {
         self.update_y_hat();
     }
 
-    pub fn fit(mut self, n_iter: usize, m_try: f64, split_try: usize) -> (f64, MPF) {
+    pub fn fit(mut self, n_iter: usize, m_try: f64, split_try: usize) -> (FitResult, MPF) {
         let mut rng = rand::thread_rng();
         let mut best_loss = self.loss();
 
@@ -190,7 +193,11 @@ impl<'a> ForestFitter<'a> {
         }
 
         (
-            best_loss,
+            FitResult {
+                err: best_loss,
+                residuals: self.residuals,
+                y_hat: self.y_hat,
+            },
             MPF::new(
                 self.tg_fitters
                     .into_iter()
