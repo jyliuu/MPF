@@ -4,40 +4,36 @@ use rand::seq::SliceRandom;
 use rand::Rng;
 use std::collections::{BTreeSet, HashMap};
 
-use crate::tree_grid::model::{TreeGrid, TreeGridParams};
+use crate::tree_grid::model::FittedTreeGrid;
+use crate::tree_grid::tree_grid_fitter::{
+    find_refine_candidate, find_slice_candidate, RefineCandidate, TreeGridFitter,
+};
 
+use super::MPF;
 pub struct ForestFitter<'a> {
     pub dims: usize,
-    pub points: ArrayView2<'a, f64>,
-    pub labels: ArrayView1<'a, f64>,
-    pub tree_grids: HashMap<BTreeSet<usize>, Vec<TreeGrid>>,
+    pub x: ArrayView2<'a, f64>,
+    pub y: ArrayView1<'a, f64>,
+    pub tg_fitters: HashMap<BTreeSet<usize>, Vec<TreeGridFitter<'a>>>,
     pub y_hat: Array1<f64>,
     pub residuals: Array1<f64>,
 }
 
 impl<'a> ForestFitter<'a> {
-    pub fn new(points: ArrayView2<'a, f64>, labels: ArrayView1<'a, f64>) -> Self {
-        let dims = points.shape()[1];
-        let intercept_grid = TreeGrid::new(TreeGridParams {
-            n_iter: 50,
-            split_try: 10,
-            colsample_bytree: 1.0,
-        });
-        let mut tree_grids = HashMap::new();
-        tree_grids.insert(BTreeSet::new(), vec![]);
-        tree_grids
-            .get_mut(&BTreeSet::new())
-            .unwrap()
-            .push(intercept_grid);
+    pub fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
+        let dims = x.shape()[1];
+        let intercept_grid = TreeGridFitter::new(x, y);
+        let mut tg_fitters = HashMap::new();
+        tg_fitters.insert(BTreeSet::new(), vec![intercept_grid]);
 
-        let y_hat = Array1::zeros(labels.len());
-        let residuals = labels.to_owned() - &y_hat;
+        let y_hat = Array1::zeros(y.len());
+        let residuals = y.to_owned() - &y_hat;
 
         Self {
             dims,
-            points,
-            labels,
-            tree_grids,
+            x,
+            y,
+            tg_fitters,
             y_hat,
             residuals,
         }
@@ -45,12 +41,12 @@ impl<'a> ForestFitter<'a> {
 
     pub fn update_y_hat(&mut self) {
         self.y_hat.fill(0.0);
-        for grids in self.tree_grids.values() {
+        for grids in self.tg_fitters.values() {
             for grid in grids {
-                self.y_hat += &grid.predict(self.points);
+                self.y_hat += &grid.y_hat;
             }
         }
-        self.residuals = self.labels.to_owned() - &self.y_hat;
+        self.residuals = self.y.to_owned() - &self.y_hat;
     }
 
     pub fn loss(&self) -> f64 {
@@ -64,12 +60,12 @@ impl<'a> ForestFitter<'a> {
         > = HashMap::new();
         let mut rng = rand::thread_rng();
 
-        for (s, j) in self.tree_grids.keys().cartesian_product(0..self.dims) {
+        for (s, j) in self.tg_fitters.keys().cartesian_product(0..self.dims) {
             let mut s_union_j = s.clone();
             s_union_j.insert(j);
 
-            if !self.tree_grids[s].is_empty()
-                && (!self.tree_grids.contains_key(&s_union_j) || s.contains(&j))
+            if !self.tg_fitters[s].is_empty()
+                && (!self.tg_fitters.contains_key(&s_union_j) || s.contains(&j))
             {
                 possible_tree_structure_after_split
                     .entry(s_union_j)
@@ -81,7 +77,7 @@ impl<'a> ForestFitter<'a> {
         let mut potential_splits = Vec::new();
         for (s_union_j, sjs) in possible_tree_structure_after_split {
             if let Some(&(ref s, j)) = sjs.choose(&mut rng) {
-                let tree_grid_idx = rng.gen_range(0..self.tree_grids[s].len());
+                let tree_grid_idx = rng.gen_range(0..self.tg_fitters[s].len());
                 potential_splits.push((s.clone(), j, tree_grid_idx));
             }
         }
@@ -91,59 +87,40 @@ impl<'a> ForestFitter<'a> {
 
     pub fn update_estimator(
         &mut self,
-        candidate: (BTreeSet<usize>, usize, usize),
-        split: (f64, f64, usize, f64),
+        s: BTreeSet<usize>,
+        sample_tg_idx: usize,
+        refine_candidate: RefineCandidate,
     ) {
-        let (s, dim, sample_tg_idx) = candidate;
-        let (_, _, split_dim, split_val) = split;
-
-        if let Some(tree_grids) = self.tree_grids.get_mut(&s) {
-            if let Some(sample_tg) = tree_grids.get_mut(sample_tg_idx) {
-                sample_tg.fit(self.points, self.labels);
+        let dim = refine_candidate.col;
+        if let Some(tg_fitters) = self.tg_fitters.get_mut(&s) {
+            if let Some(sample_tg) = tg_fitters.get_mut(sample_tg_idx) {
+                sample_tg.update_tree(refine_candidate);
             }
         }
 
         if !s.contains(&dim) {
-            if let Some(tree_grids) = self.tree_grids.get_mut(&s) {
+            if let Some(tg_fitters) = self.tg_fitters.get_mut(&s) {
                 let mut new_s = s.clone();
                 new_s.insert(dim);
 
-                if let Some(sample_tg) = tree_grids.get(sample_tg_idx) {
-                    let mut new_grid = TreeGrid::new(TreeGridParams {
-                        n_iter: 50,
-                        split_try: 10,
-                        colsample_bytree: 1.0,
-                    });
-                    new_grid.fit(self.points, self.labels);
-
-                    tree_grids.remove(sample_tg_idx);
-                    self.tree_grids.entry(new_s).or_default().push(new_grid);
-                }
+                let sample_tg = tg_fitters.remove(sample_tg_idx);
+                self.tg_fitters.entry(new_s).or_default().push(sample_tg);
             }
 
             if s.is_empty() {
-                let mut new_grid = TreeGrid::new(TreeGridParams {
-                    n_iter: 50,
-                    split_try: 10,
-                    colsample_bytree: 1.0,
-                });
-                new_grid.fit(self.points, self.labels);
+                let new_tg_fitter = TreeGridFitter::new(self.x, self.y);
 
-                self.tree_grids
+                self.tg_fitters
                     .entry(BTreeSet::new())
                     .or_default()
-                    .push(TreeGrid::new(TreeGridParams {
-                        n_iter: 50,
-                        split_try: 10,
-                        colsample_bytree: 1.0,
-                    }));
+                    .push(new_tg_fitter);
             }
         }
 
         self.update_y_hat();
     }
 
-    pub fn fit(&mut self, n_iter: usize, m_try: f64, split_try: usize) -> f64 {
+    pub fn fit(mut self, n_iter: usize, m_try: f64, split_try: usize) -> (f64, MPF) {
         let mut rng = rand::thread_rng();
         let mut best_loss = self.loss();
 
@@ -166,44 +143,60 @@ impl<'a> ForestFitter<'a> {
                 let mut best_err_diff = f64::NEG_INFINITY;
 
                 for _ in 0..split_try {
-                    let split_idx = rng.gen_range(0..self.points.shape()[0]);
-                    let split_val = self.points[[split_idx, dim]];
+                    let split_idx = rng.gen_range(0..self.x.shape()[0]);
+                    let split_val = self.x[[split_idx, dim]];
 
-                    if let Some(tree_grids) = self.tree_grids.get(&s) {
-                        if let Some(sample_tg) = tree_grids.get(sample_tg_idx) {
-                            let old_loss = self.loss();
-                            let mut new_grid = TreeGrid::new(TreeGridParams {
-                                n_iter: 50,
-                                split_try: 10,
-                                colsample_bytree: 1.0,
-                            });
-                            new_grid.fit(self.points, self.labels);
-                            let new_loss = self.loss();
-                            let err_diff = old_loss - new_loss;
+                    if let Some(tg_fitters) = self.tg_fitters.get(&s) {
+                        if let Some(sample_tg) = tg_fitters.get(sample_tg_idx) {
+                            let slice_candidate = find_slice_candidate(
+                                &sample_tg.splits,
+                                &sample_tg.intervals,
+                                dim,
+                                split_val,
+                            );
+                            let (err_new, err_old, refine_candidate) = find_refine_candidate(
+                                slice_candidate,
+                                self.x.view(),
+                                &sample_tg.leaf_points,
+                                &sample_tg.grid_values,
+                                &sample_tg.intervals,
+                                self.residuals.view(),
+                            );
+                            let err_diff = err_old - err_new;
 
                             if err_diff > best_err_diff {
                                 best_err_diff = err_diff;
-                                best_split = Some((old_loss, new_loss, dim, split_val));
+                                best_split = Some((s.clone(), sample_tg_idx, refine_candidate));
                             }
                         }
                     }
                 }
 
                 if let Some(split) = best_split {
-                    candidates.push(((s, sample_tg_idx, dim), split));
+                    candidates.push((best_err_diff, split));
                 }
             }
 
-            if let Some((candidate, split)) = candidates.into_iter().max_by(|a, b| {
-                let a_diff = a.1 .0 - a.1 .1;
-                let b_diff = b.1 .0 - b.1 .1;
-                a_diff.partial_cmp(&b_diff).unwrap()
-            }) {
-                self.update_estimator(candidate, split);
+            if let Some((_, (s, sample_tg_idx, refine_candidate))) =
+                candidates.into_iter().max_by(|a, b| {
+                    let a_diff = a.0;
+                    let b_diff = b.0;
+                    a_diff.partial_cmp(&b_diff).unwrap()
+                })
+            {
+                self.update_estimator(s, sample_tg_idx, refine_candidate);
                 best_loss = self.loss();
             }
         }
 
-        best_loss
+        (
+            best_loss,
+            MPF::new(
+                self.tg_fitters
+                    .into_iter()
+                    .map(|(s, tg_fitters)| (s, tg_fitters.into_iter().map_into().collect()))
+                    .collect(),
+            ),
+        )
     }
 }

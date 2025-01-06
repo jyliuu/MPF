@@ -1,5 +1,7 @@
 use ndarray::{Array1, ArrayView2, Axis};
 
+use super::tree_grid_fitter::TreeGridFitter;
+
 #[cfg(test)]
 mod tests;
 
@@ -38,19 +40,14 @@ impl FittedTreeGrid {
         }
         y_hat
     }
+}
 
-    // pub fn fit<'a>(&mut self, x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> FitResult {
-    //     let mut fitter = TreeGridFitter::new(x, y);
-    //     let result = fitter.fit(self.hyperparameters.clone());
-
-    //     self.splits = fitter.splits;
-    //     self.intervals = fitter.intervals;
-    //     self.grid_values = fitter.grid_values;
-    //     self.is_fitted = true;
-    //     FitResult {
-    //         err: result,
-    //         residuals: fitter.residuals,
-    //         y_hat: fitter.y_hat,
-    //     }
-    // }
+impl<'a> From<TreeGridFitter<'a>> for FittedTreeGrid {
+    fn from(fitter: TreeGridFitter<'a>) -> Self {
+        FittedTreeGrid {
+            splits: fitter.splits,
+            intervals: fitter.intervals,
+            grid_values: fitter.grid_values,
+        }
+    }
 }

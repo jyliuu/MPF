@@ -71,7 +71,7 @@ fn compute_initial_values(
     (mean, grid_values, y_hat)
 }
 
-fn find_slice_candidate(
+pub fn find_slice_candidate(
     splits: &[Vec<f64>],
     intervals: &[Vec<(f64, f64)>],
     col: usize,
@@ -104,7 +104,7 @@ fn compute_leaf_values(leaf: &Array1<usize>, grid_values: &[Vec<f64>]) -> f64 {
         .product()
 }
 
-fn find_refine_candidate<'a>(
+pub fn find_refine_candidate<'a>(
     slice_candidate: SliceCandidate,
     x: ArrayView2<f64>,
     leaf_points: &Array2<usize>,
@@ -284,7 +284,7 @@ impl<'a> TreeGridFitter<'a> {
         }
     }
 
-    fn update_tree(&mut self, refine_candidate: RefineCandidate) {
+    pub fn update_tree(&mut self, refine_candidate: RefineCandidate) {
         let RefineCandidate {
             col,
             split,
