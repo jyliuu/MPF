@@ -1,28 +1,13 @@
 use core::f64;
 
-use super::{
-    super::model::{FittedTreeGrid, TreeGridParams},
-    FitResultPy, TreeGridPy,
-};
+use crate::tree_grid::tree_grid_fitter::{TreeGridFitter, TreeGridParams};
+
+use super::{FitResultPy, TreeGridPy};
 use numpy::{PyArray1, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
-use pyo3::prelude::*;
+use pyo3::{prelude::*, types::PyType};
 
 #[pymethods]
 impl TreeGridPy {
-    #[new]
-    fn new(n_iter: usize, split_try: usize, colsample_bytree: f64) -> Self {
-        TreeGridPy(FittedTreeGrid::new(TreeGridParams {
-            n_iter,
-            split_try,
-            colsample_bytree,
-        }))
-    }
-
-    #[getter]
-    pub fn is_fitted(&self) -> bool {
-        self.is_fitted
-    }
-
     #[pyo3(name = "predict")]
     pub fn _predict<'py>(
         &self,
@@ -34,15 +19,25 @@ impl TreeGridPy {
         Ok(y_hat.to_pyarray(py))
     }
 
+    #[classmethod]
     #[pyo3(name = "fit")]
     pub fn _fit<'py>(
-        &mut self,
+        _cls: &Bound<'_, PyType>,
         x: PyReadonlyArray2<'py, f64>,
         y: PyReadonlyArray1<'py, f64>,
-    ) -> PyResult<FitResultPy> {
+        n_iter: usize,
+        split_try: usize,
+        colsample_bytree: f64,
+    ) -> PyResult<(TreeGridPy, FitResultPy)> {
         let x = x.as_array();
         let y = y.as_array();
-        let fit_result = self.fit(x, y);
-        Ok(FitResultPy(fit_result))
+        let params = TreeGridParams {
+            n_iter,
+            split_try,
+            colsample_bytree,
+        };
+        let tg_fitter = TreeGridFitter::new(x.view(), y.view());
+        let (fit_result, tg) = tg_fitter.fit(params);
+        Ok((tg.into(), FitResultPy(fit_result)))
     }
 }

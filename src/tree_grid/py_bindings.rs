@@ -10,6 +10,12 @@ mod tree_grid;
 #[pyclass(name = "TreeGrid")]
 pub struct TreeGridPy(FittedTreeGrid);
 
+impl From<FittedTreeGrid> for TreeGridPy {
+    fn from(tg: FittedTreeGrid) -> Self {
+        TreeGridPy(tg)
+    }
+}
+
 impl Deref for TreeGridPy {
     type Target = FittedTreeGrid;
 
