@@ -4,7 +4,6 @@ use rand::seq::SliceRandom;
 use rand::Rng;
 use std::collections::{BTreeSet, HashMap};
 
-use crate::tree_grid::model::FittedTreeGrid;
 use crate::tree_grid::tree_grid_fitter::{
     find_refine_candidate, find_slice_candidate, RefineCandidate, TreeGridFitter,
 };

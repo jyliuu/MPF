@@ -104,13 +104,13 @@ fn compute_leaf_values(leaf: &Array1<usize>, grid_values: &[Vec<f64>]) -> f64 {
         .product()
 }
 
-pub fn find_refine_candidate<'a>(
+pub fn find_refine_candidate(
     slice_candidate: SliceCandidate,
     x: ArrayView2<f64>,
     leaf_points: &Array2<usize>,
     grid_values: &[Vec<f64>],
     intervals: &[Vec<(f64, f64)>],
-    residuals: ArrayView1<'a, f64>,
+    residuals: ArrayView1<'_, f64>,
 ) -> (f64, f64, RefineCandidate) {
     let SliceCandidate {
         col,
