@@ -8,7 +8,8 @@ use crate::tree_grid::tree_grid_fitter::{
     find_refine_candidate, find_slice_candidate, RefineCandidate, TreeGridFitter,
 };
 
-use super::MPF;
+use super::mpf::MPF;
+
 pub struct ForestFitter<'a> {
     pub dims: usize,
     pub x: ArrayView2<'a, f64>,
