@@ -2,6 +2,8 @@ use csv::ReaderBuilder;
 use ndarray::Array1;
 use ndarray::Array2;
 
+use crate::tree_grid::tree_grid_fitter::TreeGridParams;
+
 use super::*;
 
 fn setup_data() -> (Array2<f64>, Array1<f64>) {
@@ -33,9 +35,9 @@ fn setup_data() -> (Array2<f64>, Array1<f64>) {
 #[test]
 fn test_model_fit() {
     let (x, y) = setup_data();
-    let mut tree_grid = TreeGridFitter::new(x.view(), y.view());
+    let tree_grid_fitter = TreeGridFitter::new(x.view(), y.view());
 
-    let fit_result = tree_grid.fit(TreeGridParams {
+    let (fit_result, tree_grid) = tree_grid_fitter.fit(TreeGridParams {
         n_iter: 50,
         split_try: 10,
         colsample_bytree: 1.0,
@@ -47,8 +49,8 @@ fn test_model_fit() {
 #[test]
 fn test_model_predict() {
     let (x, y) = setup_data();
-    let mut tree_grid = TreeGridFitter::new(x.view(), y.view());
-    let fit_result = tree_grid.fit(TreeGridParams {
+    let tree_grid_fitter = TreeGridFitter::new(x.view(), y.view());
+    let (fit_result, tree_grid) = tree_grid_fitter.fit(TreeGridParams {
         n_iter: 50,
         split_try: 10,
         colsample_bytree: 1.0,
