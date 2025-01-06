@@ -274,13 +274,6 @@ impl<'a> TreeGridFitter<'a> {
         self.combined_residuals = Some(combined_residuals);
     }
 
-    fn get_residuals(&'a self) -> ArrayView1<'a, f64> {
-        match self.combined_residuals {
-            Some(r) => r,
-            None => self.residuals.view(),
-        }
-    }
-
     pub fn update_tree(&mut self, refine_candidate: RefineCandidate) {
         let RefineCandidate {
             col,
