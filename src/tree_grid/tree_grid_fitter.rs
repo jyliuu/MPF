@@ -4,6 +4,8 @@ use itertools::Itertools;
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rand::{seq::SliceRandom, Rng};
 
+use crate::FitResult;
+
 use super::model::FittedTreeGrid;
 
 #[derive(Debug)]
@@ -19,12 +21,6 @@ pub struct TreeGridFitter<'a> {
     pub combined_residuals: Option<ArrayView1<'a, f64>>,
 }
 
-#[derive(Debug)]
-pub struct FitResult {
-    pub err: f64,
-    pub residuals: Array1<f64>,
-    pub y_hat: Array1<f64>,
-}
 #[derive(Debug, Clone)]
 pub struct TreeGridParams {
     pub n_iter: usize,

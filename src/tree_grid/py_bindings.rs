@@ -1,13 +1,13 @@
 use std::ops::{Deref, DerefMut};
 
-use super::{model::FittedTreeGrid, tree_grid_fitter::FitResult};
+use super::{model::FittedTreeGrid};
 use pyo3::prelude::*;
 
 use core::f64;
 
 use numpy::{PyArray1, ToPyArray};
 
-use crate::tree_grid::tree_grid_fitter::{TreeGridFitter, TreeGridParams};
+use crate::{tree_grid::tree_grid_fitter::{TreeGridFitter, TreeGridParams}, FitResult};
 
 use numpy::{PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::types::PyType;
