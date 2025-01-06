@@ -1,7 +1,7 @@
 use core::f64;
 
 use super::{
-    super::model::{TreeGrid, TreeGridParams},
+    super::model::{FittedTreeGrid, TreeGridParams},
     FitResultPy, TreeGridPy,
 };
 use numpy::{PyArray1, PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
@@ -11,7 +11,7 @@ use pyo3::prelude::*;
 impl TreeGridPy {
     #[new]
     fn new(n_iter: usize, split_try: usize, colsample_bytree: f64) -> Self {
-        TreeGridPy(TreeGrid::new(TreeGridParams {
+        TreeGridPy(FittedTreeGrid::new(TreeGridParams {
             n_iter,
             split_try,
             colsample_bytree,

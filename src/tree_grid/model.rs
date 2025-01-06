@@ -1,46 +1,25 @@
-use core::f64;
-
-use super::tree_grid_fitter::TreeGridFitter;
-use ndarray::{Array1, ArrayView1, ArrayView2, Axis};
+use ndarray::{Array1, ArrayView2, Axis};
 
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Clone)]
-pub struct TreeGridParams {
-    pub n_iter: usize,
-    pub split_try: usize,
-    pub colsample_bytree: f64,
-}
-
 #[derive(Debug)]
-pub struct TreeGrid {
-    pub is_fitted: bool,
+pub struct FittedTreeGrid {
     pub splits: Vec<Vec<f64>>,
     pub intervals: Vec<Vec<(f64, f64)>>,
     pub grid_values: Vec<Vec<f64>>,
-    pub hyperparameters: TreeGridParams,
 }
 
-#[derive(Debug)]
-pub struct FitResult {
-    pub err: f64,
-    pub residuals: Array1<f64>,
-    pub y_hat: Array1<f64>,
-}
-
-impl TreeGrid {
-    pub fn new(hyperparameters: TreeGridParams) -> Self {
-        let splits = vec![];
-        let intervals = vec![];
-        let grid_values = vec![];
-
-        TreeGrid {
-            is_fitted: false,
+impl FittedTreeGrid {
+    pub fn new(
+        splits: Vec<Vec<f64>>,
+        intervals: Vec<Vec<(f64, f64)>>,
+        grid_values: Vec<Vec<f64>>,
+    ) -> Self {
+        FittedTreeGrid {
             splits,
             intervals,
             grid_values,
-            hyperparameters,
         }
     }
 
@@ -60,18 +39,18 @@ impl TreeGrid {
         y_hat
     }
 
-    pub fn fit<'a>(&mut self, x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> FitResult {
-        let mut fitter = TreeGridFitter::new(x, y);
-        let result = fitter.fit(self.hyperparameters.clone());
+    // pub fn fit<'a>(&mut self, x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> FitResult {
+    //     let mut fitter = TreeGridFitter::new(x, y);
+    //     let result = fitter.fit(self.hyperparameters.clone());
 
-        self.splits = fitter.splits;
-        self.intervals = fitter.intervals;
-        self.grid_values = fitter.grid_values;
-        self.is_fitted = true;
-        FitResult {
-            err: result,
-            residuals: fitter.residuals,
-            y_hat: fitter.y_hat,
-        }
-    }
+    //     self.splits = fitter.splits;
+    //     self.intervals = fitter.intervals;
+    //     self.grid_values = fitter.grid_values;
+    //     self.is_fitted = true;
+    //     FitResult {
+    //         err: result,
+    //         residuals: fitter.residuals,
+    //         y_hat: fitter.y_hat,
+    //     }
+    // }
 }

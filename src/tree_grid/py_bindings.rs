@@ -1,17 +1,17 @@
 use std::ops::{Deref, DerefMut};
 
-use super::model::{FitResult, TreeGrid};
+use super::{model::FittedTreeGrid, tree_grid_fitter::FitResult};
 use pyo3::prelude::*;
 
-mod tree_grid;
 mod fit_result;
+mod tree_grid;
 
 #[derive(Debug)]
 #[pyclass(name = "TreeGrid")]
-pub struct TreeGridPy(TreeGrid);
+pub struct TreeGridPy(FittedTreeGrid);
 
 impl Deref for TreeGridPy {
-    type Target = TreeGrid;
+    type Target = FittedTreeGrid;
 
     fn deref(&self) -> &Self::Target {
         &self.0

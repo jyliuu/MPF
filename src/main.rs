@@ -1,5 +1,5 @@
 use csv::ReaderBuilder;
-use mpf::tree_grid::model;
+use mpf::tree_grid::{model, tree_grid_fitter::TreeGridFitter};
 use ndarray::{Array1, Array2};
 
 fn setup_data() -> (Array2<f64>, Array1<f64>) {
@@ -31,13 +31,13 @@ fn setup_data() -> (Array2<f64>, Array1<f64>) {
 fn main() {
     println!("Running main");
     let (x, y) = setup_data();
-    let mut tree_grid = model::TreeGrid::new(model::TreeGridParams {
+    let mut tg_fitter = TreeGridFitter::new(x.view(), y.view());
+    let fit_result = tg_fitter.fit(TreeGridParams {
         n_iter: 100,
         split_try: 10,
         colsample_bytree: 1.0,
     });
-    let fit_result = tree_grid.fit(x.view(), y.view());
-    let y_hat = tree_grid.predict(x.view());
+    let y_hat = fit_result.y_hat;
 
     println!("Error: {:?}", fit_result.err);
     println!("y_hat: {:?}", y_hat);
