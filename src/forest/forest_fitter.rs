@@ -11,7 +11,7 @@ use crate::{
     FitResult,
 };
 
-use super::mpf::MPF;
+use super::mpf::TreeGridFamily;
 
 pub struct ForestFitter<'a> {
     pub dims: usize,
@@ -127,7 +127,12 @@ impl<'a> ForestFitter<'a> {
         self.update_residuals();
     }
 
-    pub fn fit(mut self, n_iter: usize, m_try: f64, split_try: usize) -> (FitResult, MPF) {
+    pub fn fit(
+        mut self,
+        n_iter: usize,
+        m_try: f64,
+        split_try: usize,
+    ) -> (FitResult, TreeGridFamily) {
         let mut rng = rand::thread_rng();
 
         for _ in 0..n_iter {
@@ -201,7 +206,7 @@ impl<'a> ForestFitter<'a> {
                 residuals: self.residuals,
                 y_hat: self.y_hat,
             },
-            MPF::new(
+            TreeGridFamily::new(
                 self.tg_fitters
                     .into_iter()
                     .map(|(s, tg_fitters)| (s, tg_fitters.into_iter().map_into().collect()))

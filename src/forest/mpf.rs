@@ -4,11 +4,11 @@ use std::collections::{BTreeSet, HashMap};
 use crate::tree_grid::model::FittedTreeGrid;
 
 #[derive(Debug)]
-pub struct MPF {
+pub struct TreeGridFamily {
     tree_grids: HashMap<BTreeSet<usize>, Vec<FittedTreeGrid>>,
 }
 
-impl MPF {
+impl TreeGridFamily {
     pub fn new(tree_grids: HashMap<BTreeSet<usize>, Vec<FittedTreeGrid>>) -> Self {
         Self { tree_grids }
     }
