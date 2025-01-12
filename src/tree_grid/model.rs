@@ -2,7 +2,6 @@ use ndarray::{Array1, ArrayView2, Axis};
 
 use super::tree_grid_fitter::TreeGridFitter;
 
-
 #[derive(Debug)]
 pub struct FittedTreeGrid {
     pub splits: Vec<Vec<f64>>,
@@ -97,7 +96,13 @@ mod tests {
             colsample_bytree: 1.0,
         });
 
-        println!("Error: {:?}", fit_result.err);
+        let mean = y.mean().unwrap();
+        let base_err = (y - mean).powi(2).mean().unwrap();
+        println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
+        assert!(
+            fit_result.err < base_err,
+            "Error is not less than mean error"
+        );
     }
 
     #[test]
