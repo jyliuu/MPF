@@ -27,9 +27,9 @@ impl<'a> ForestFitter<'a> {
         let dims = x.shape()[1];
         let intercept_grid = TreeGridFitter::new(x, y);
         let mut tg_fitters = HashMap::new();
+        let y_hat = intercept_grid.y_hat.clone();
         tg_fitters.insert(BTreeSet::new(), vec![intercept_grid]);
 
-        let y_hat = Array1::zeros(y.len());
         let residuals = y.to_owned() - &y_hat;
 
         Self {
@@ -42,18 +42,22 @@ impl<'a> ForestFitter<'a> {
         }
     }
 
-    pub fn update_y_hat(&mut self) {
+    fn update_y_hat(&mut self) {
         self.y_hat.fill(0.0);
         for grids in self.tg_fitters.values() {
             for grid in grids {
                 self.y_hat += &grid.y_hat;
             }
         }
+    }
+
+    fn update_residuals(&mut self) {
+        self.update_y_hat();
         self.residuals = self.y.to_owned() - &self.y_hat;
     }
 
     pub fn loss(&self) -> f64 {
-        self.residuals.iter().map(|x| x * x).sum::<f64>() / self.residuals.len() as f64
+        self.residuals.pow2().mean().unwrap()
     }
 
     pub fn potential_splits(&self) -> Vec<(BTreeSet<usize>, usize, usize)> {
@@ -120,12 +124,11 @@ impl<'a> ForestFitter<'a> {
             }
         }
 
-        self.update_y_hat();
+        self.update_residuals();
     }
 
     pub fn fit(mut self, n_iter: usize, m_try: f64, split_try: usize) -> (FitResult, MPF) {
         let mut rng = rand::thread_rng();
-        let mut best_loss = self.loss();
 
         for _ in 0..n_iter {
             let potential_splits = self.potential_splits();
@@ -146,7 +149,7 @@ impl<'a> ForestFitter<'a> {
                 let mut best_err_diff = f64::NEG_INFINITY;
 
                 for _ in 0..split_try {
-                    let split_idx = rng.gen_range(0..self.x.shape()[0]);
+                    let split_idx = rng.gen_range(0..self.x.nrows());
                     let split_val = self.x[[split_idx, dim]];
 
                     if let Some(tg_fitters) = self.tg_fitters.get(&s) {
@@ -159,11 +162,12 @@ impl<'a> ForestFitter<'a> {
                             );
                             let (err_new, err_old, refine_candidate) = find_refine_candidate(
                                 slice_candidate,
-                                self.x.view(),
+                                sample_tg.x,
                                 &sample_tg.leaf_points,
                                 &sample_tg.grid_values,
                                 &sample_tg.intervals,
                                 self.residuals.view(),
+                                self.y_hat.view(),
                             );
                             let err_diff = err_old - err_new;
 
@@ -188,13 +192,12 @@ impl<'a> ForestFitter<'a> {
                 })
             {
                 self.update_estimator(s, sample_tg_idx, refine_candidate);
-                best_loss = self.loss();
             }
         }
 
         (
             FitResult {
-                err: best_loss,
+                err: self.loss(),
                 residuals: self.residuals,
                 y_hat: self.y_hat,
             },

@@ -18,7 +18,6 @@ pub struct TreeGridFitter<'a> {
     pub x: ArrayView2<'a, f64>,
     pub y_hat: Array1<f64>,
     pub residuals: Array1<f64>,
-    pub combined_residuals: Option<ArrayView1<'a, f64>>,
 }
 
 #[derive(Debug, Clone)]
@@ -104,6 +103,7 @@ pub fn find_refine_candidate(
     grid_values: &[Vec<f64>],
     intervals: &[Vec<(f64, f64)>],
     residuals: ArrayView1<'_, f64>,
+    y_hat: ArrayView1<'_, f64>,
 ) -> (f64, f64, RefineCandidate) {
     let SliceCandidate {
         col,
@@ -182,15 +182,14 @@ pub fn find_refine_candidate(
 
     let new_resid_a = a_points_idx
         .iter()
-        .map(|(i, _)| residuals[*i].powf(2.0))
-        .sum::<f64>();
-
+        .map(|(i, _)| residuals[*i] + y_hat[*i] * (1.0 - update_a))
+        .collect::<Array1<f64>>();
     let new_resid_b = b_points_idx
         .iter()
-        .map(|(i, _)| residuals[*i].powf(2.0))
-        .sum::<f64>();
+        .map(|(i, _)| residuals[*i] + y_hat[*i] * (1.0 - update_b))
+        .collect::<Array1<f64>>();
 
-    let err_new = new_resid_a + new_resid_b;
+    let err_new = new_resid_a.powi(2).sum() + new_resid_b.powi(2).sum();
 
     let refine_candidate = RefineCandidate {
         col,
@@ -262,12 +261,7 @@ impl<'a> TreeGridFitter<'a> {
             x,
             y_hat,
             residuals,
-            combined_residuals: None,
         }
-    }
-
-    pub fn set_combined_residuals(&mut self, combined_residuals: ArrayView1<'a, f64>) {
-        self.combined_residuals = Some(combined_residuals);
     }
 
     pub fn update_tree(&mut self, refine_candidate: RefineCandidate) {
@@ -326,9 +320,6 @@ impl<'a> TreeGridFitter<'a> {
             for &col in &col_idx {
                 for &idx in &split_idx {
                     let split = self.x[[idx, col]];
-                    // let (err_new, err_old, refine_candidate) =
-                    //     self.slice_and_refine_candidate(col, split);
-
                     let slice_candidate =
                         find_slice_candidate(&self.splits, &self.intervals, col, split);
                     let (err_new, err_old, refine_candidate) = find_refine_candidate(
@@ -338,6 +329,7 @@ impl<'a> TreeGridFitter<'a> {
                         &self.grid_values,
                         &self.intervals,
                         self.residuals.view(),
+                        self.y_hat.view(),
                     );
 
                     let err_diff = err_old - err_new;
@@ -401,6 +393,7 @@ mod tests {
             &tree_grid.grid_values,
             &tree_grid.intervals,
             tree_grid.residuals.view(),
+            tree_grid.y_hat.view(),
         );
         assert_eq!(refine_candidate.update_a, 0.5);
         assert_eq!(refine_candidate.update_b, 1.5);
@@ -419,6 +412,7 @@ mod tests {
             &tree_grid.grid_values,
             &tree_grid.intervals,
             tree_grid.residuals.view(),
+            tree_grid.y_hat.view(),
         );
         tree_grid.update_tree(refine_candidate);
         assert_eq!(tree_grid.grid_values[0], vec![0.5, 1.5]);
