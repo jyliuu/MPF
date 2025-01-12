@@ -13,7 +13,7 @@ use crate::{
 
 use super::mpf::TreeGridFamily;
 
-pub struct ForestFitter<'a> {
+pub struct TreeGridFamilyFitter<'a> {
     pub dims: usize,
     pub x: ArrayView2<'a, f64>,
     pub y: ArrayView1<'a, f64>,
@@ -22,7 +22,7 @@ pub struct ForestFitter<'a> {
     pub residuals: Array1<f64>,
 }
 
-impl<'a> ForestFitter<'a> {
+impl<'a> TreeGridFamilyFitter<'a> {
     pub fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
         let dims = x.shape()[1];
         let intercept_grid = TreeGridFitter::new(x, y);

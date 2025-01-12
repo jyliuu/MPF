@@ -29,7 +29,7 @@ mod tests {
     use csv::ReaderBuilder;
     use ndarray::Array2;
 
-    use crate::forest::forest_fitter::ForestFitter;
+    use crate::forest::forest_fitter::TreeGridFamilyFitter;
 
     use super::*;
     fn setup_data() -> (Array2<f64>, Array1<f64>) {
@@ -61,8 +61,8 @@ mod tests {
     #[test]
     fn test_fit() {
         let (x, y) = setup_data();
-        let forest_fitter = ForestFitter::new(x.view(), y.view());
-        let (fit_result, _) = forest_fitter.fit(100, 1.0, 10);
+        let tgf_fitter = TreeGridFamilyFitter::new(x.view(), y.view());
+        let (fit_result, _) = tgf_fitter.fit(100, 1.0, 10);
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();
         println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
@@ -73,12 +73,12 @@ mod tests {
     }
 
     #[test]
-    fn test_mpf_predict() {
+    fn test_tgf_predict() {
         let (x, y) = setup_data();
-        let forest_fitter = ForestFitter::new(x.view(), y.view());
-        let (fit_result, mpf) = forest_fitter.fit(100, 1.0, 10);
+        let tgf_fitter = TreeGridFamilyFitter::new(x.view(), y.view());
+        let (fit_result, tgf) = tgf_fitter.fit(100, 1.0, 10);
 
-        let pred = mpf.predict(x.view());
+        let pred = tgf.predict(x.view());
         let diff = fit_result.y_hat - pred;
         assert!(diff.iter().all(|&x| x < 1e-6));
     }
