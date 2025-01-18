@@ -1,11 +1,11 @@
 use csv::ReaderBuilder;
-use mpf::tree_grid::tree_grid_fitter::{TreeGridFitter, TreeGridParams};
+use mpf::{forest::forest_fitter::MPFFitter, tree_grid::tree_grid_fitter::{TreeGridFitter, TreeGridParams}};
 use ndarray::{Array1, Array2};
 
 fn setup_data() -> (Array2<f64>, Array1<f64>) {
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
-        .from_path("src/tree_grid/model/dat.csv")
+        .from_path("./dat.csv")
         .expect("Failed to open file");
 
     let mut x_data = Vec::new();
@@ -31,14 +31,14 @@ fn setup_data() -> (Array2<f64>, Array1<f64>) {
 fn main() {
     println!("Running main");
     let (x, y) = setup_data();
-    let tg_fitter = TreeGridFitter::new(x.view(), y.view());
-    let (fit_result, tree_grid) = tg_fitter.fit(TreeGridParams {
-        n_iter: 100,
-        split_try: 10,
-        colsample_bytree: 1.0,
-    });
-    let y_hat = tree_grid.predict(x.view());
+    let mpf_fitter = MPFFitter::new(x.view(), y.view());
+    let (fit_result, mpf) = mpf_fitter.fit(100, 100, 1.0, 10);
 
-    println!("Error: {:?}", fit_result.err);
-    println!("y_hat: {:?}", y_hat);
+    let mean = y.mean().unwrap();
+    let base_err = (y - mean).powi(2).mean().unwrap();
+    println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
+    assert!(
+        fit_result.err < base_err,
+        "Error is not less than mean error"
+    );
 }
