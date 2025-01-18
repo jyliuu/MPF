@@ -5,7 +5,8 @@ edition = "2021"
 
 [lib]
 name = "mpf"
-crate-type = ["cdylib", "lib"]
+crate-type = ["lib"]
+
 
 [dependencies]
 itertools = "0.13.0"

@@ -1,16 +1,56 @@
-use std::ops::{Deref, DerefMut};
-
-use super::{model::FittedTreeGrid};
 use pyo3::prelude::*;
 
 use core::f64;
+use std::ops::{Deref, DerefMut};
 
 use numpy::{PyArray1, ToPyArray};
 
-use crate::{tree_grid::tree_grid_fitter::{TreeGridFitter, TreeGridParams}, FitResult};
+use mpf::{
+    tree_grid::{
+        model::FittedTreeGrid,
+        tree_grid_fitter::{TreeGridFitter, TreeGridParams},
+    },
+    FitResult,
+};
 
 use numpy::{PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::types::PyType;
+
+#[derive(Debug)]
+#[pyclass(name = "TreeGrid")]
+pub struct TreeGridPy(FittedTreeGrid);
+
+impl From<FittedTreeGrid> for TreeGridPy {
+    fn from(tg: FittedTreeGrid) -> Self {
+        TreeGridPy(tg)
+    }
+}
+
+impl Deref for TreeGridPy {
+    type Target = FittedTreeGrid;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for TreeGridPy {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Debug)]
+#[pyclass(name = "FitResult")]
+pub struct FitResultPy(FitResult);
+
+impl Deref for FitResultPy {
+    type Target = FitResult;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[pymethods]
 impl TreeGridPy {
@@ -70,38 +110,9 @@ impl FitResultPy {
     }
 }
 
-#[derive(Debug)]
-#[pyclass(name = "TreeGrid")]
-pub struct TreeGridPy(FittedTreeGrid);
-
-impl From<FittedTreeGrid> for TreeGridPy {
-    fn from(tg: FittedTreeGrid) -> Self {
-        TreeGridPy(tg)
-    }
-}
-
-impl Deref for TreeGridPy {
-    type Target = FittedTreeGrid;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for TreeGridPy {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-#[derive(Debug)]
-#[pyclass(name = "FitResult")]
-pub struct FitResultPy(FitResult);
-
-impl Deref for FitResultPy {
-    type Target = FitResult;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+#[pymodule]
+fn mpf_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<TreeGridPy>()?;
+    m.add_class::<FitResultPy>()?;
+    Ok(())
 }
