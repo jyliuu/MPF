@@ -1,5 +1,8 @@
 use csv::ReaderBuilder;
-use mpf::{forest::forest_fitter::MPFFitter, tree_grid::tree_grid_fitter::{TreeGridFitter, TreeGridParams}};
+use mpf::{
+    forest::forest_fitter::{MPFFitter, MPFParams},
+    ModelFitter,
+};
 use ndarray::{Array1, Array2};
 
 fn setup_data() -> (Array2<f64>, Array1<f64>) {
@@ -32,7 +35,12 @@ fn main() {
     println!("Running main");
     let (x, y) = setup_data();
     let mpf_fitter = MPFFitter::new(x.view(), y.view());
-    let (fit_result, mpf) = mpf_fitter.fit(100, 100, 1.0, 10);
+    let (fit_result, mpf) = mpf_fitter.fit(MPFParams {
+        n_families: 100,
+        n_iter: 100,
+        m_try: 1.0,
+        split_try: 10,
+    });
 
     let mean = y.mean().unwrap();
     let base_err = (y - mean).powi(2).mean().unwrap();
