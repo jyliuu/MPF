@@ -11,34 +11,210 @@ use crate::{
     FitResult, FittedModel, ModelFitter,
 };
 
-use super::grid::FittedTreeGrid;
+use super::{grid::FittedTreeGrid, tree_grid_fitter::TreeGridParams};
 
-#[derive(Debug)]
-pub struct TreeGridFamily(Vec<FittedTreeGrid>);
+pub struct BaggedVariant;
+pub struct AveragedVariant;
 
-impl TreeGridFamily {
-    pub const fn new(tree_grids: Vec<FittedTreeGrid>) -> Self {
-        Self(tree_grids)
+impl Default for BaggedVariant {
+    fn default() -> Self {
+        BaggedVariant
     }
 }
 
-impl FittedModel for TreeGridFamily {
+impl Default for AveragedVariant {
+    fn default() -> Self {
+        AveragedVariant
+    }
+}
+
+#[derive(Debug)]
+pub struct TreeGridFamily<T>(T, Vec<FittedTreeGrid>);
+
+impl FittedModel for TreeGridFamily<BaggedVariant> {
+    fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
+        let mut result = Array1::ones(x.shape()[0]);
+        let mut signs = Array1::from_elem(x.shape()[0], 0.0);
+        for grids in &self.1 {
+            let pred = grids.predict(x.view());
+
+            result *= &pred;
+            signs += &pred.signum();
+        }
+
+        signs = signs.signum();
+
+        result.zip_mut_with(&signs, |v, sign| {
+            *v = sign * (*v).abs().powf(1.0 / self.1.len() as f64);
+        });
+
+        result
+    }
+}
+
+impl FittedModel for TreeGridFamily<AveragedVariant> {
     fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
         let mut result = Array1::zeros(x.shape()[0]);
-        for grid in self.0.iter() {
+        for grid in self.1.iter() {
             result += &grid.predict(x);
         }
         result
     }
 }
 
-pub struct TreeGridFamilyParams {
+#[derive(Debug)]
+pub struct TreeGridFamilyAveragedParams {
     pub n_iter: usize,
     pub m_try: f64,
     pub split_try: usize,
 }
 
-pub struct TreeGridFamilyFitter<'a> {
+#[derive(Debug)]
+pub struct TreeGridFamilyBaggedParams {
+    pub B: usize,
+    pub tg_params: TreeGridParams,
+}
+
+pub trait FitAndPredictStrategy<'a> {
+    type HyperParameters;
+    type Model: FittedModel;
+    type Features: 'a;
+    type Labels: 'a;
+
+    fn fit(
+        x: Self::Features,
+        y: Self::Labels,
+        hyperparameters: Self::HyperParameters,
+    ) -> (FitResult, Self::Model);
+    fn predict(model: Self::Model, x: Self::Features) -> Array1<f64>;
+}
+
+impl<'a> FitAndPredictStrategy<'a> for BaggedVariant {
+    type HyperParameters = TreeGridFamilyBaggedParams;
+    type Model = TreeGridFamily<BaggedVariant>;
+    type Features = ArrayView2<'a, f64>;
+    type Labels = ArrayView1<'a, f64>;
+
+    fn fit(
+        x: Self::Features,
+        y: Self::Labels,
+        hyperparameters: Self::HyperParameters,
+    ) -> (FitResult, Self::Model) {
+        TreeGridFamilyBaggedFitter::new(x, y).fit(hyperparameters)
+    }
+    fn predict(model: Self::Model, x: Self::Features) -> Array1<f64> {
+        model.predict(x)
+    }
+}
+
+impl<'a> FitAndPredictStrategy<'a> for AveragedVariant {
+    type HyperParameters = TreeGridFamilyAveragedParams;
+    type Model = TreeGridFamily<AveragedVariant>;
+    type Features = ArrayView2<'a, f64>;
+    type Labels = ArrayView1<'a, f64>;
+
+    fn fit(
+        x: Self::Features,
+        y: Self::Labels,
+        hyperparameters: Self::HyperParameters,
+    ) -> (FitResult, Self::Model) {
+        TreeGridFamilyAveragedFitter::new(x, y).fit(hyperparameters)
+    }
+    fn predict(model: Self::Model, x: Self::Features) -> Array1<f64> {
+        model.predict(x)
+    }
+}
+
+pub struct TreeGridFamilyFitter<'a, T: FitAndPredictStrategy<'a>> {
+    variant: T,
+    x: T::Features,
+    y: T::Labels,
+}
+
+impl<'a, T> ModelFitter<'a> for TreeGridFamilyFitter<'a, T>
+where
+    TreeGridFamily<T>: FittedModel,
+    T: FitAndPredictStrategy<'a> + Default,
+{
+    type Features = T::Features;
+    type Labels = T::Labels;
+    type Model = T::Model;
+    type HyperParameters = T::HyperParameters;
+
+    fn new(x: Self::Features, y: Self::Labels) -> Self {
+        Self {
+            variant: T::default(),
+            x,
+            y,
+        }
+    }
+
+    fn fit(self, hyperparameters: Self::HyperParameters) -> (FitResult, Self::Model) {
+        T::fit(self.x, self.y, hyperparameters)
+    }
+}
+
+struct TreeGridFamilyBaggedFitter<'a> {
+    pub x: ArrayView2<'a, f64>,
+    pub y: ArrayView1<'a, f64>,
+}
+
+impl<'a> ModelFitter<'a> for TreeGridFamilyBaggedFitter<'a> {
+    type Features = ArrayView2<'a, f64>;
+    type Labels = ArrayView1<'a, f64>;
+    type Model = TreeGridFamily<BaggedVariant>;
+    type HyperParameters = TreeGridFamilyBaggedParams;
+
+    fn new(x: Self::Features, y: Self::Labels) -> Self {
+        Self { x, y }
+    }
+
+    fn fit(
+        self,
+        hyperparameters: Self::HyperParameters,
+    ) -> (FitResult, TreeGridFamily<BaggedVariant>) {
+        let TreeGridFamilyBaggedParams { B, tg_params } = hyperparameters;
+        let TreeGridParams {
+            n_iter,
+            split_try,
+            colsample_bytree,
+        } = tg_params;
+        let mut rng = rand::thread_rng();
+        let mut tree_grids = vec![];
+
+        let n = self.x.nrows();
+
+        for b in 0..B {
+            let sample_indices: Vec<usize> = (0..n).map(|_| rng.gen_range(0..n)).collect();
+            let x_sample = self.x.select(ndarray::Axis(0), &sample_indices);
+            let y_sample = self.y.select(ndarray::Axis(0), &sample_indices);
+            let tg_fitter = TreeGridFitter::new(x_sample.view(), y_sample.view());
+            let (fit_res, tg): (FitResult, FittedTreeGrid) = tg_fitter.fit(TreeGridParams {
+                n_iter,
+                split_try,
+                colsample_bytree,
+            });
+            println!("b: {:?}, err: {:?}", b, fit_res.err);
+            tree_grids.push(tg);
+        }
+
+        let tgf = TreeGridFamily(BaggedVariant, tree_grids);
+
+        let preds = tgf.predict(self.x);
+        let residuals = &self.y - &preds;
+        let err = residuals.pow2().mean().unwrap();
+
+        (
+            FitResult {
+                err,
+                residuals: residuals.to_owned(),
+                y_hat: preds,
+            },
+            tgf,
+        )
+    }
+}
+struct TreeGridFamilyAveragedFitter<'a> {
     dims: usize,
     x: ArrayView2<'a, f64>,
     y: ArrayView1<'a, f64>,
@@ -47,7 +223,7 @@ pub struct TreeGridFamilyFitter<'a> {
     residuals: Array1<f64>,
 }
 
-impl TreeGridFamilyFitter<'_> {
+impl TreeGridFamilyAveragedFitter<'_> {
     fn update_y_hat(&mut self) {
         self.y_hat.fill(0.0);
         for grids in self.tg_fitters.values() {
@@ -134,9 +310,9 @@ impl TreeGridFamilyFitter<'_> {
     }
 }
 
-impl<'a> ModelFitter<'a> for TreeGridFamilyFitter<'a> {
-    type HyperParameters = TreeGridFamilyParams;
-    type Model = TreeGridFamily;
+impl<'a> ModelFitter<'a> for TreeGridFamilyAveragedFitter<'a> {
+    type HyperParameters = TreeGridFamilyAveragedParams;
+    type Model = TreeGridFamily<AveragedVariant>;
     type Features = ArrayView2<'a, f64>;
     type Labels = ArrayView1<'a, f64>;
 
@@ -159,8 +335,11 @@ impl<'a> ModelFitter<'a> for TreeGridFamilyFitter<'a> {
         }
     }
 
-    fn fit(mut self, hyperparameters: Self::HyperParameters) -> (FitResult, TreeGridFamily) {
-        let TreeGridFamilyParams {
+    fn fit(
+        mut self,
+        hyperparameters: Self::HyperParameters,
+    ) -> (FitResult, TreeGridFamily<AveragedVariant>) {
+        let TreeGridFamilyAveragedParams {
             n_iter,
             m_try,
             split_try,
@@ -238,7 +417,10 @@ impl<'a> ModelFitter<'a> for TreeGridFamilyFitter<'a> {
                 residuals: self.residuals,
                 y_hat: self.y_hat,
             },
-            TreeGridFamily::new(self.tg_fitters.into_values().flatten().map_into().collect()),
+            TreeGridFamily(
+                AveragedVariant,
+                self.tg_fitters.into_values().flatten().map_into().collect(),
+            ),
         )
     }
 }
@@ -276,10 +458,32 @@ mod tests {
     }
 
     #[test]
-    fn test_tgf_fit() {
+    fn test_tgf_bagged_fit() {
         let (x, y) = setup_data();
-        let tgf_fitter = TreeGridFamilyFitter::new(x.view(), y.view());
-        let (fit_result, _) = tgf_fitter.fit(TreeGridFamilyParams {
+        let tgf_fitter: TreeGridFamilyBaggedFitter<'_> =
+            TreeGridFamilyBaggedFitter::new(x.view(), y.view());
+        let (fit_result, _) = tgf_fitter.fit(TreeGridFamilyBaggedParams {
+            B: 100,
+            tg_params: TreeGridParams {
+                n_iter: 100,
+                split_try: 10,
+                colsample_bytree: 1.0,
+            },
+        });
+        let mean = y.mean().unwrap();
+        let base_err = (y - mean).powi(2).mean().unwrap();
+        println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
+        assert!(
+            fit_result.err < base_err,
+            "Error is not less than mean error"
+        );
+    }
+
+    #[test]
+    fn test_tgf_averaged_fit() {
+        let (x, y) = setup_data();
+        let tgf_fitter = TreeGridFamilyAveragedFitter::new(x.view(), y.view());
+        let (fit_result, _) = tgf_fitter.fit(TreeGridFamilyAveragedParams {
             n_iter: 100,
             m_try: 1.0,
             split_try: 10,
@@ -294,10 +498,32 @@ mod tests {
     }
 
     #[test]
+    fn test_tgf_fit() {
+        let (x, y) = setup_data();
+        let tgf_fitter: TreeGridFamilyFitter<'_, AveragedVariant> =
+            TreeGridFamilyFitter::new(x.view(), y.view());
+
+        let (fit_result, _) = tgf_fitter.fit(TreeGridFamilyAveragedParams {
+            n_iter: 100,
+            m_try: 1.0,
+            split_try: 10,
+        });
+
+        let mean = y.mean().unwrap();
+        let base_err = (y - mean).powi(2).mean().unwrap();
+        println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
+        assert!(
+            fit_result.err < base_err,
+            "Error is not less than mean error"
+        );
+    }
+
+    #[test]
     fn test_tgf_predict() {
         let (x, y) = setup_data();
-        let tgf_fitter = TreeGridFamilyFitter::new(x.view(), y.view());
-        let (fit_result, tgf) = tgf_fitter.fit(TreeGridFamilyParams {
+        let tgf_fitter: TreeGridFamilyFitter<'_, AveragedVariant> =
+            TreeGridFamilyFitter::new(x.view(), y.view());
+        let (fit_result, tgf) = tgf_fitter.fit(TreeGridFamilyAveragedParams {
             n_iter: 100,
             m_try: 1.0,
             split_try: 10,

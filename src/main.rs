@@ -35,7 +35,7 @@ fn main() {
     println!("Running main");
     let (x, y) = setup_data();
     let mpf_fitter = MPFFitter::new(x.view(), y.view());
-    let (fit_result, mpf) = mpf_fitter.fit(MPFParams {
+    let (fit_result, mpf) = mpf_fitter.fit_averaged(MPFParams {
         n_families: 100,
         n_iter: 100,
         m_try: 1.0,

@@ -1,7 +1,10 @@
 use ndarray::{ArrayView1, ArrayView2};
 
 use crate::{
-    tree_grid::tree_grid_family::{TreeGridFamily, TreeGridFamilyFitter, TreeGridFamilyParams},
+    tree_grid::tree_grid_family::{
+        AveragedVariant, BaggedVariant, TreeGridFamily, TreeGridFamilyAveragedParams,
+        TreeGridFamilyFitter,
+    },
     FitResult, ModelFitter,
 };
 
@@ -19,16 +22,15 @@ pub struct MPFParams {
     pub split_try: usize,
 }
 
-impl<'a> ModelFitter<'a> for MPFFitter<'a> {
-    type Model = MPF<TreeGridFamily>;
-    type HyperParameters = MPFParams;
-    type Features = ArrayView2<'a, f64>;
-    type Labels = ArrayView1<'a, f64>;
-    fn new(x: Self::Features, y: Self::Labels) -> Self {
+impl<'a> MPFFitter<'a> {
+    pub fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
         Self { x, y }
     }
 
-    fn fit(self, hyperparameters: Self::HyperParameters) -> (FitResult, MPF<TreeGridFamily>) {
+    pub fn fit_averaged(
+        self,
+        hyperparameters: MPFParams,
+    ) -> (FitResult, MPF<TreeGridFamily<AveragedVariant>>) {
         let MPFParams {
             n_families,
             n_iter,
@@ -38,12 +40,14 @@ impl<'a> ModelFitter<'a> for MPFFitter<'a> {
         let mut fitted_tree_grid_families = Vec::new();
         let mut fit_results = Vec::new();
         for _ in 0..n_families {
-            let tg_family_fitter = TreeGridFamilyFitter::new(self.x, self.y);
-            let (tgf_fit_result, tree_grid_family) = tg_family_fitter.fit(TreeGridFamilyParams {
-                n_iter,
-                m_try,
-                split_try,
-            });
+            let tg_family_fitter: TreeGridFamilyFitter<'a, AveragedVariant> =
+                TreeGridFamilyFitter::new(self.x, self.y);
+            let (tgf_fit_result, tree_grid_family) =
+                tg_family_fitter.fit(TreeGridFamilyAveragedParams {
+                    n_iter,
+                    m_try,
+                    split_try,
+                });
             fitted_tree_grid_families.push(tree_grid_family);
             fit_results.push(tgf_fit_result);
         }
@@ -62,6 +66,13 @@ impl<'a> ModelFitter<'a> for MPFFitter<'a> {
         fit_result.err = fit_result.residuals.pow2().mean().unwrap();
 
         (fit_result, MPF::new(fitted_tree_grid_families))
+    }
+
+    pub fn fit_bagged(
+        self,
+        hyperparameters: MPFParams,
+    ) -> (FitResult, MPF<TreeGridFamily<BaggedVariant>>) {
+        unimplemented!()
     }
 }
 
@@ -103,7 +114,7 @@ mod tests {
     fn test_mpf_fit() {
         let (x, y) = setup_data();
         let mpf_fitter = MPFFitter::new(x.view(), y.view());
-        let (fit_result, _) = mpf_fitter.fit(MPFParams {
+        let (fit_result, _) = mpf_fitter.fit_averaged(MPFParams {
             n_families: 100,
             n_iter: 100,
             m_try: 1.0,
@@ -123,7 +134,7 @@ mod tests {
     fn test_mpf_predict() {
         let (x, y) = setup_data();
         let mpf_fitter = MPFFitter::new(x.view(), y.view());
-        let (fit_result, mpf) = mpf_fitter.fit(MPFParams {
+        let (fit_result, mpf) = mpf_fitter.fit_averaged(MPFParams {
             n_families: 100,
             n_iter: 100,
             m_try: 1.0,
