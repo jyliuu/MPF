@@ -6,7 +6,7 @@ use rand::{seq::SliceRandom, Rng};
 
 use crate::{FitResult, ModelFitter};
 
-use super::tree_grid::FittedTreeGrid;
+use super::grid::FittedTreeGrid;
 
 #[derive(Debug)]
 pub struct TreeGridFitter<'a> {

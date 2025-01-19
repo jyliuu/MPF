@@ -4,7 +4,7 @@ use rand::Rng;
 use crate::{tree_grid::tree_grid_fitter::TreeGridFitter, FitResult};
 use crate::{FittedModel, ModelFitter};
 
-use super::tree_grid::FittedTreeGrid;
+use super::grid::FittedTreeGrid;
 use super::tree_grid_fitter::TreeGridParams;
 
 #[derive(Debug)]
