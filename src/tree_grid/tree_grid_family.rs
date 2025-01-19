@@ -14,23 +14,19 @@ use crate::{
 use super::grid::FittedTreeGrid;
 
 #[derive(Debug)]
-pub struct TreeGridFamily {
-    tree_grids: HashMap<BTreeSet<usize>, Vec<FittedTreeGrid>>,
-}
+pub struct TreeGridFamily(Vec<FittedTreeGrid>);
 
 impl TreeGridFamily {
-    pub const fn new(tree_grids: HashMap<BTreeSet<usize>, Vec<FittedTreeGrid>>) -> Self {
-        Self { tree_grids }
+    pub const fn new(tree_grids: Vec<FittedTreeGrid>) -> Self {
+        Self(tree_grids)
     }
 }
 
 impl FittedModel for TreeGridFamily {
     fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
         let mut result = Array1::zeros(x.shape()[0]);
-        for grids in self.tree_grids.values() {
-            for grid in grids {
-                result += &grid.predict(x);
-            }
+        for grid in self.0.iter() {
+            result += &grid.predict(x);
         }
         result
     }
@@ -43,12 +39,12 @@ pub struct TreeGridFamilyParams {
 }
 
 pub struct TreeGridFamilyFitter<'a> {
-    pub dims: usize,
-    pub x: ArrayView2<'a, f64>,
-    pub y: ArrayView1<'a, f64>,
-    pub tg_fitters: HashMap<BTreeSet<usize>, Vec<TreeGridFitter<'a>>>,
-    pub y_hat: Array1<f64>,
-    pub residuals: Array1<f64>,
+    dims: usize,
+    x: ArrayView2<'a, f64>,
+    y: ArrayView1<'a, f64>,
+    tg_fitters: HashMap<BTreeSet<usize>, Vec<TreeGridFitter<'a>>>,
+    y_hat: Array1<f64>,
+    residuals: Array1<f64>,
 }
 
 impl TreeGridFamilyFitter<'_> {
@@ -242,12 +238,7 @@ impl<'a> ModelFitter<'a> for TreeGridFamilyFitter<'a> {
                 residuals: self.residuals,
                 y_hat: self.y_hat,
             },
-            TreeGridFamily::new(
-                self.tg_fitters
-                    .into_iter()
-                    .map(|(s, tg_fitters)| (s, tg_fitters.into_iter().map_into().collect()))
-                    .collect(),
-            ),
+            TreeGridFamily::new(self.tg_fitters.into_values().flatten().map_into().collect()),
         )
     }
 }
