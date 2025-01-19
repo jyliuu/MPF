@@ -11,7 +11,7 @@ use crate::{
     FitResult, FittedModel,
 };
 
-use super::model::FittedTreeGrid;
+use super::tree_grid::FittedTreeGrid;
 
 #[derive(Debug)]
 pub struct TreeGridFamily {
