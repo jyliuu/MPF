@@ -1,8 +1,9 @@
+use fitter::TreeGridFitter;
 use ndarray::{Array1, ArrayView2, Axis};
 
 use crate::FittedModel;
 
-use super::tree_grid_fitter::TreeGridFitter;
+pub mod fitter;
 
 #[derive(Debug)]
 pub struct FittedTreeGrid {
@@ -56,10 +57,10 @@ impl<'a> From<TreeGridFitter<'a>> for FittedTreeGrid {
 #[cfg(test)]
 mod tests {
     use csv::ReaderBuilder;
+    use fitter::TreeGridParams;
     use ndarray::Array1;
     use ndarray::Array2;
 
-    use crate::tree_grid::tree_grid_fitter::TreeGridParams;
     use crate::ModelFitter;
 
     use super::*;

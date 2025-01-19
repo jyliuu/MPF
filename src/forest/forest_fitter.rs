@@ -1,9 +1,10 @@
 use ndarray::{ArrayView1, ArrayView2};
 
 use crate::{
-    tree_grid::tree_grid_family::{
-        AveragedVariant, BaggedVariant, TreeGridFamily, TreeGridFamilyAveragedParams,
-        TreeGridFamilyFitter,
+    tree_grid::family::{
+        bagged::BaggedVariant,
+        grown::{GrownVariant, TreeGridFamilyGrownParams},
+        TreeGridFamily, TreeGridFamilyFitter,
     },
     FitResult, ModelFitter,
 };
@@ -27,10 +28,10 @@ impl<'a> MPFFitter<'a> {
         Self { x, y }
     }
 
-    pub fn fit_averaged(
+    pub fn fit_grown(
         self,
         hyperparameters: MPFParams,
-    ) -> (FitResult, MPF<TreeGridFamily<AveragedVariant>>) {
+    ) -> (FitResult, MPF<TreeGridFamily<GrownVariant>>) {
         let MPFParams {
             n_families,
             n_iter,
@@ -40,10 +41,10 @@ impl<'a> MPFFitter<'a> {
         let mut fitted_tree_grid_families = Vec::new();
         let mut fit_results = Vec::new();
         for _ in 0..n_families {
-            let tg_family_fitter: TreeGridFamilyFitter<'a, AveragedVariant> =
+            let tg_family_fitter: TreeGridFamilyFitter<'a, GrownVariant> =
                 TreeGridFamilyFitter::new(self.x, self.y);
             let (tgf_fit_result, tree_grid_family) =
-                tg_family_fitter.fit(TreeGridFamilyAveragedParams {
+                tg_family_fitter.fit(TreeGridFamilyGrownParams {
                     n_iter,
                     m_try,
                     split_try,
@@ -114,7 +115,7 @@ mod tests {
     fn test_mpf_fit() {
         let (x, y) = setup_data();
         let mpf_fitter = MPFFitter::new(x.view(), y.view());
-        let (fit_result, _) = mpf_fitter.fit_averaged(MPFParams {
+        let (fit_result, _) = mpf_fitter.fit_grown(MPFParams {
             n_families: 100,
             n_iter: 100,
             m_try: 1.0,
@@ -134,7 +135,7 @@ mod tests {
     fn test_mpf_predict() {
         let (x, y) = setup_data();
         let mpf_fitter = MPFFitter::new(x.view(), y.view());
-        let (fit_result, mpf) = mpf_fitter.fit_averaged(MPFParams {
+        let (fit_result, mpf) = mpf_fitter.fit_grown(MPFParams {
             n_families: 100,
             n_iter: 100,
             m_try: 1.0,
