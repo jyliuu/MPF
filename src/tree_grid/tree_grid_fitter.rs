@@ -4,7 +4,7 @@ use itertools::Itertools;
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rand::{seq::SliceRandom, Rng};
 
-use crate::FitResult;
+use crate::{FitResult, ModelFitter};
 
 use super::tree_grid::FittedTreeGrid;
 
@@ -243,27 +243,7 @@ fn update_predictions(
     }
 }
 
-impl<'a> TreeGridFitter<'a> {
-    pub fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
-        let leaf_points = Array2::zeros((x.nrows(), x.ncols()));
-        let splits = vec![vec![]; x.ncols()];
-        let intervals = vec![vec![(f64::NEG_INFINITY, f64::INFINITY)]; x.ncols()];
-
-        let (_, grid_values, y_hat) = compute_initial_values(x, y);
-        let residuals = y.to_owned() - &y_hat;
-
-        TreeGridFitter {
-            splits,
-            intervals,
-            grid_values,
-            leaf_points,
-            labels: y,
-            x,
-            y_hat,
-            residuals,
-        }
-    }
-
+impl TreeGridFitter<'_> {
     pub fn update_tree(&mut self, refine_candidate: RefineCandidate) {
         let RefineCandidate {
             col,
@@ -297,8 +277,35 @@ impl<'a> TreeGridFitter<'a> {
             update_b,
         );
     }
+}
 
-    pub fn fit(mut self, hyperparameters: TreeGridParams) -> (FitResult, FittedTreeGrid) {
+impl<'a> ModelFitter<'a> for TreeGridFitter<'a> {
+    type HyperParameters = TreeGridParams;
+    type Model = FittedTreeGrid;
+    type Features = ArrayView2<'a, f64>;
+    type Labels = ArrayView1<'a, f64>;
+
+    fn new(x: Self::Features, y: Self::Labels) -> Self {
+        let leaf_points = Array2::zeros((x.nrows(), x.ncols()));
+        let splits = vec![vec![]; x.ncols()];
+        let intervals = vec![vec![(f64::NEG_INFINITY, f64::INFINITY)]; x.ncols()];
+
+        let (_, grid_values, y_hat) = compute_initial_values(x, y);
+        let residuals = y.to_owned() - &y_hat;
+
+        TreeGridFitter {
+            splits,
+            intervals,
+            grid_values,
+            leaf_points,
+            labels: y,
+            x,
+            y_hat,
+            residuals,
+        }
+    }
+
+    fn fit(mut self, hyperparameters: Self::HyperParameters) -> (FitResult, Self::Model) {
         let mut rng = rand::thread_rng();
         let n_cols = self.x.ncols();
         let n_rows = self.x.nrows();

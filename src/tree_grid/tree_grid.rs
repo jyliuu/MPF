@@ -1,5 +1,7 @@
 use ndarray::{Array1, ArrayView2, Axis};
 
+use crate::FittedModel;
+
 use super::tree_grid_fitter::TreeGridFitter;
 
 #[derive(Debug)]
@@ -21,8 +23,10 @@ impl FittedTreeGrid {
             grid_values,
         }
     }
+}
 
-    pub fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
+impl FittedModel for FittedTreeGrid {
+    fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
         let mut y_hat = Array1::zeros(x.nrows());
         for (i, row) in x.axis_iter(Axis(0)).enumerate() {
             let mut prod = 1.0;
@@ -56,6 +60,7 @@ mod tests {
     use ndarray::Array2;
 
     use crate::tree_grid::tree_grid_fitter::TreeGridParams;
+    use crate::ModelFitter;
 
     use super::*;
 

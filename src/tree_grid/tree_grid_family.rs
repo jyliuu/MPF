@@ -8,7 +8,7 @@ use crate::{
     tree_grid::tree_grid_fitter::{
         find_refine_candidate, find_slice_candidate, RefineCandidate, TreeGridFitter,
     },
-    FitResult, FittedModel,
+    FitResult, FittedModel, ModelFitter,
 };
 
 use super::tree_grid::FittedTreeGrid;

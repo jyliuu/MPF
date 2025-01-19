@@ -1,7 +1,7 @@
 use ndarray::{Array1, ArrayView1, ArrayView2};
 use rand::Rng;
 
-use crate::FittedModel;
+use crate::{FittedModel, ModelFitter};
 use crate::{tree_grid::tree_grid_fitter::TreeGridFitter, FitResult};
 
 use super::tree_grid::FittedTreeGrid;
