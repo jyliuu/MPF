@@ -8,7 +8,7 @@ use crate::{
     tree_grid::tree_grid_fitter::{
         find_refine_candidate, find_slice_candidate, RefineCandidate, TreeGridFitter,
     },
-    FitResult,
+    FitResult, FittedModel,
 };
 
 use super::model::FittedTreeGrid;
@@ -22,8 +22,10 @@ impl TreeGridFamily {
     pub fn new(tree_grids: HashMap<BTreeSet<usize>, Vec<FittedTreeGrid>>) -> Self {
         Self { tree_grids }
     }
+}
 
-    pub fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
+impl FittedModel for TreeGridFamily {
+    fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
         let mut result = Array1::zeros(x.shape()[0]);
         for grids in self.tree_grids.values() {
             for grid in grids {

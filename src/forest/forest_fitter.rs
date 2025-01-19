@@ -1,6 +1,6 @@
 use ndarray::{ArrayView1, ArrayView2};
 
-use crate::{tree_grid::tree_grid_family::TreeGridFamilyFitter, FitResult};
+use crate::{tree_grid::tree_grid_family::{TreeGridFamily, TreeGridFamilyFitter}, FitResult};
 
 use super::mpf::MPF;
 
@@ -20,7 +20,7 @@ impl<'a> MPFFitter<'a> {
         n_iter: usize,
         m_try: f64,
         split_try: usize,
-    ) -> (FitResult, MPF) {
+    ) -> (FitResult, MPF<TreeGridFamily>) {
         let mut fitted_tree_grid_families = Vec::new();
         let mut fit_results = Vec::new();
         for _ in 0..n_families {

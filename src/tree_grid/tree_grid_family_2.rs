@@ -1,6 +1,7 @@
 use ndarray::{Array1, ArrayView1, ArrayView2};
 use rand::Rng;
 
+use crate::FittedModel;
 use crate::{tree_grid::tree_grid_fitter::TreeGridFitter, FitResult};
 
 use super::model::FittedTreeGrid;
@@ -11,12 +12,8 @@ pub struct TreeGridFamilyBagged {
     tree_grids: Vec<FittedTreeGrid>,
 }
 
-impl TreeGridFamilyBagged {
-    pub fn new(tree_grids: Vec<FittedTreeGrid>) -> Self {
-        Self { tree_grids }
-    }
-
-    pub fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
+impl FittedModel for TreeGridFamilyBagged {
+    fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
         let mut result = Array1::ones(x.shape()[0]);
         let mut signs = Array1::from_elem(x.shape()[0], 0.0);
         for grids in &self.tree_grids {
@@ -33,6 +30,12 @@ impl TreeGridFamilyBagged {
         });
 
         result
+    }
+}
+
+impl TreeGridFamilyBagged {
+    pub fn new(tree_grids: Vec<FittedTreeGrid>) -> Self {
+        Self { tree_grids }
     }
 
     pub fn predict2(&self, x: ArrayView2<f64>) -> Array1<f64> {
