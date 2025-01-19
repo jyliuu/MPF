@@ -1,8 +1,8 @@
 use ndarray::{Array1, ArrayView1, ArrayView2};
 use rand::Rng;
 
-use crate::{FittedModel, ModelFitter};
 use crate::{tree_grid::tree_grid_fitter::TreeGridFitter, FitResult};
+use crate::{FittedModel, ModelFitter};
 
 use super::tree_grid::FittedTreeGrid;
 use super::tree_grid_fitter::TreeGridParams;
@@ -26,7 +26,7 @@ impl FittedModel for TreeGridFamilyBagged {
         signs = signs.signum();
 
         result.zip_mut_with(&signs, |v, sign| {
-            *v = sign * (*v).abs().powf(1.0 / self.tree_grids.len() as f64)
+            *v = sign * (*v).abs().powf(1.0 / self.tree_grids.len() as f64);
         });
 
         result
@@ -34,7 +34,7 @@ impl FittedModel for TreeGridFamilyBagged {
 }
 
 impl TreeGridFamilyBagged {
-    pub fn new(tree_grids: Vec<FittedTreeGrid>) -> Self {
+    pub const fn new(tree_grids: Vec<FittedTreeGrid>) -> Self {
         Self { tree_grids }
     }
 
@@ -51,7 +51,7 @@ impl TreeGridFamilyBagged {
         signs = signs.signum();
 
         result.zip_mut_with(&signs, |v, sign| {
-            *v = sign * (*v).abs() / self.tree_grids.len() as f64
+            *v = sign * (*v).abs() / self.tree_grids.len() as f64;
         });
 
         result
@@ -64,7 +64,7 @@ pub struct TreeGridFamilyBaggedFitter<'a> {
 }
 
 impl<'a> TreeGridFamilyBaggedFitter<'a> {
-    pub fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
+    pub const fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
         Self { x, y }
     }
 

@@ -12,12 +12,12 @@ pub struct FittedTreeGrid {
 }
 
 impl FittedTreeGrid {
-    pub fn new(
+    pub const fn new(
         splits: Vec<Vec<f64>>,
         intervals: Vec<Vec<(f64, f64)>>,
         grid_values: Vec<Vec<f64>>,
     ) -> Self {
-        FittedTreeGrid {
+        Self {
             splits,
             intervals,
             grid_values,
@@ -45,7 +45,7 @@ impl FittedModel for FittedTreeGrid {
 
 impl<'a> From<TreeGridFitter<'a>> for FittedTreeGrid {
     fn from(fitter: TreeGridFitter<'a>) -> Self {
-        FittedTreeGrid {
+        Self {
             splits: fitter.splits,
             intervals: fitter.intervals,
             grid_values: fitter.grid_values,
@@ -122,7 +122,7 @@ mod tests {
 
         let y_hat = tree_grid.predict(x.view());
         let diff = &fit_result.y_hat - &y_hat;
-        println!("diff: {:?}", diff);
+        println!("diff: {diff:?}");
 
         assert!(diff.iter().all(|&x| x < 1e-6));
     }

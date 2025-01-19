@@ -154,8 +154,8 @@ pub fn find_refine_candidate(
             })
             .partition(|(_, is_a)| *is_a);
 
-        n_a += v.powf(2.0) * resids_a.len() as f64;
-        n_b += v.powf(2.0) * resids_b.len() as f64;
+        n_a += v.powi(2) * resids_a.len() as f64;
+        n_b += v.powi(2) * resids_b.len() as f64;
         m_a += v * resids_a.into_iter().map(|(r, _)| r).sum::<f64>();
         m_b += v * resids_b.into_iter().map(|(r, _)| r).sum::<f64>();
     }
@@ -182,11 +182,11 @@ pub fn find_refine_candidate(
 
     let new_resid_a = a_points_idx
         .iter()
-        .map(|(i, _)| residuals[*i] + y_hat[*i] * (1.0 - update_a))
+        .map(|(i, _)| y_hat[*i].mul_add(1.0 - update_a, residuals[*i]))
         .collect::<Array1<f64>>();
     let new_resid_b = b_points_idx
         .iter()
-        .map(|(i, _)| residuals[*i] + y_hat[*i] * (1.0 - update_b))
+        .map(|(i, _)| y_hat[*i].mul_add(1.0 - update_b, residuals[*i]))
         .collect::<Array1<f64>>();
 
     let err_new = new_resid_a.powi(2).sum() + new_resid_b.powi(2).sum();

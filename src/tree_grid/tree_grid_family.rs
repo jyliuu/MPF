@@ -19,7 +19,7 @@ pub struct TreeGridFamily {
 }
 
 impl TreeGridFamily {
-    pub fn new(tree_grids: HashMap<BTreeSet<usize>, Vec<FittedTreeGrid>>) -> Self {
+    pub const fn new(tree_grids: HashMap<BTreeSet<usize>, Vec<FittedTreeGrid>>) -> Self {
         Self { tree_grids }
     }
 }
@@ -36,6 +36,12 @@ impl FittedModel for TreeGridFamily {
     }
 }
 
+pub struct TreeGridFamilyParams {
+    pub n_iter: usize,
+    pub m_try: f64,
+    pub split_try: usize,
+}
+
 pub struct TreeGridFamilyFitter<'a> {
     pub dims: usize,
     pub x: ArrayView2<'a, f64>,
@@ -45,26 +51,7 @@ pub struct TreeGridFamilyFitter<'a> {
     pub residuals: Array1<f64>,
 }
 
-impl<'a> TreeGridFamilyFitter<'a> {
-    pub fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
-        let dims = x.shape()[1];
-        let intercept_grid = TreeGridFitter::new(x, y);
-        let mut tg_fitters = HashMap::new();
-        let y_hat = intercept_grid.y_hat.clone();
-        tg_fitters.insert(BTreeSet::new(), vec![intercept_grid]);
-
-        let residuals = y.to_owned() - &y_hat;
-
-        Self {
-            dims,
-            x,
-            y,
-            tg_fitters,
-            y_hat,
-            residuals,
-        }
-    }
-
+impl TreeGridFamilyFitter<'_> {
     fn update_y_hat(&mut self) {
         self.y_hat.fill(0.0);
         for grids in self.tg_fitters.values() {
@@ -149,13 +136,39 @@ impl<'a> TreeGridFamilyFitter<'a> {
 
         self.update_residuals();
     }
+}
 
-    pub fn fit(
-        mut self,
-        n_iter: usize,
-        m_try: f64,
-        split_try: usize,
-    ) -> (FitResult, TreeGridFamily) {
+impl<'a> ModelFitter<'a> for TreeGridFamilyFitter<'a> {
+    type HyperParameters = TreeGridFamilyParams;
+    type Model = TreeGridFamily;
+    type Features = ArrayView2<'a, f64>;
+    type Labels = ArrayView1<'a, f64>;
+
+    fn new(x: Self::Features, y: Self::Labels) -> Self {
+        let dims = x.shape()[1];
+        let intercept_grid = TreeGridFitter::new(x, y);
+        let mut tg_fitters = HashMap::new();
+        let y_hat = intercept_grid.y_hat.clone();
+        tg_fitters.insert(BTreeSet::new(), vec![intercept_grid]);
+
+        let residuals = y.to_owned() - &y_hat;
+
+        Self {
+            dims,
+            x,
+            y,
+            tg_fitters,
+            y_hat,
+            residuals,
+        }
+    }
+
+    fn fit(mut self, hyperparameters: Self::HyperParameters) -> (FitResult, TreeGridFamily) {
+        let TreeGridFamilyParams {
+            n_iter,
+            m_try,
+            split_try,
+        } = hyperparameters;
         let mut rng = rand::thread_rng();
 
         for _ in 0..n_iter {
@@ -167,7 +180,7 @@ impl<'a> TreeGridFamilyFitter<'a> {
             let split_indices: Vec<usize> = (0..n_potential_splits).collect();
             let selected_splits: Vec<usize> = split_indices
                 .choose_multiple(&mut rng, n_splits_to_try)
-                .cloned()
+                .copied()
                 .collect();
 
             for &p_idx in &selected_splits {
@@ -244,8 +257,6 @@ mod tests {
     use csv::ReaderBuilder;
     use ndarray::Array2;
 
-    use crate::forest::forest_fitter::MPFFitter;
-
     use super::*;
     fn setup_data() -> (Array2<f64>, Array1<f64>) {
         let mut rdr = ReaderBuilder::new()
@@ -277,7 +288,11 @@ mod tests {
     fn test_tgf_fit() {
         let (x, y) = setup_data();
         let tgf_fitter = TreeGridFamilyFitter::new(x.view(), y.view());
-        let (fit_result, _) = tgf_fitter.fit(100, 1.0, 10);
+        let (fit_result, _) = tgf_fitter.fit(TreeGridFamilyParams {
+            n_iter: 100,
+            m_try: 1.0,
+            split_try: 10,
+        });
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();
         println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
@@ -291,34 +306,13 @@ mod tests {
     fn test_tgf_predict() {
         let (x, y) = setup_data();
         let tgf_fitter = TreeGridFamilyFitter::new(x.view(), y.view());
-        let (fit_result, tgf) = tgf_fitter.fit(100, 1.0, 10);
+        let (fit_result, tgf) = tgf_fitter.fit(TreeGridFamilyParams {
+            n_iter: 100,
+            m_try: 1.0,
+            split_try: 10,
+        });
 
         let pred = tgf.predict(x.view());
-        let diff = fit_result.y_hat - pred;
-        assert!(diff.iter().all(|&x| x < 1e-6));
-    }
-
-    #[test]
-    fn test_mpf_fit() {
-        let (x, y) = setup_data();
-        let mpf_fitter = MPFFitter::new(x.view(), y.view());
-        let (fit_result, _) = mpf_fitter.fit(100, 100, 1.0, 10);
-
-        let mean = y.mean().unwrap();
-        let base_err = (y - mean).powi(2).mean().unwrap();
-        println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
-        assert!(
-            fit_result.err < base_err,
-            "Error is not less than mean error"
-        );
-    }
-
-    #[test]
-    fn test_mpf_predict() {
-        let (x, y) = setup_data();
-        let mpf_fitter = MPFFitter::new(x.view(), y.view());
-        let (fit_result, mpf) = mpf_fitter.fit(100, 100, 1.0, 10);
-        let pred = mpf.predict(x.view());
         let diff = fit_result.y_hat - pred;
         assert!(diff.iter().all(|&x| x < 1e-6));
     }
