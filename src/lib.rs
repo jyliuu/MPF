@@ -22,5 +22,5 @@ pub trait ModelFitter {
     type Labels;
 
     fn new(x: Self::Features, y: Self::Labels) -> Self;
-    fn fit(self, hyperparameters: Self::HyperParameters) -> (FitResult, Self::Model);
+    fn fit(self, hyperparameters: &Self::HyperParameters) -> (FitResult, Self::Model);
 }

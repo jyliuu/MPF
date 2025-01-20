@@ -315,7 +315,7 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
         }
     }
 
-    fn fit(mut self, hyperparameters: Self::HyperParameters) -> (FitResult, Self::Model) {
+    fn fit(mut self, hyperparameters: &Self::HyperParameters) -> (FitResult, Self::Model) {
         let mut rng = rand::thread_rng();
         let n_cols = self.x.ncols();
         let n_rows = self.x.nrows();

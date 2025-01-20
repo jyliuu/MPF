@@ -47,7 +47,7 @@ impl<'a> FitAndPredictStrategy<'a> for GrownVariant {
     fn fit(
         x: Self::Features,
         y: Self::Labels,
-        hyperparameters: Self::HyperParameters,
+        hyperparameters: &Self::HyperParameters,
     ) -> (FitResult, Self::Model) {
         TreeGridFamilyGrownFitter::new(x, y).fit(hyperparameters)
     }
@@ -179,13 +179,13 @@ impl<'a> ModelFitter for TreeGridFamilyGrownFitter<'a> {
 
     fn fit(
         mut self,
-        hyperparameters: Self::HyperParameters,
+        hyperparameters: &Self::HyperParameters,
     ) -> (FitResult, TreeGridFamily<GrownVariant>) {
         let TreeGridFamilyGrownParams {
             n_iter,
             m_try,
             split_try,
-        } = hyperparameters;
+        } = *hyperparameters;
         let mut rng = rand::thread_rng();
 
         for _ in 0..n_iter {

@@ -15,7 +15,7 @@ pub trait FitAndPredictStrategy<'a> {
     fn fit(
         x: Self::Features,
         y: Self::Labels,
-        hyperparameters: Self::HyperParameters,
+        hyperparameters: &Self::HyperParameters,
     ) -> (FitResult, Self::Model);
     fn predict(model: Self::Model, x: Self::Features) -> Array1<f64>;
 }
@@ -46,7 +46,7 @@ where
         }
     }
 
-    fn fit(self, hyperparameters: Self::HyperParameters) -> (FitResult, Self::Model) {
+    fn fit(self, hyperparameters: &Self::HyperParameters) -> (FitResult, Self::Model) {
         T::fit(self.x, self.y, hyperparameters)
     }
 }
@@ -91,14 +91,15 @@ mod tests {
     fn test_tgf_bagged_fit() {
         let (x, y) = setup_data();
         let tgf_fitter = TreeGridFamilyBaggedFitter::new(x.view(), y.view());
-        let (fit_result, _) = tgf_fitter.fit(TreeGridFamilyBaggedParams {
+        let hyperparameters = TreeGridFamilyBaggedParams {
             B: 100,
             tg_params: TreeGridParams {
                 n_iter: 100,
                 split_try: 10,
                 colsample_bytree: 1.0,
             },
-        });
+        };
+        let (fit_result, _) = tgf_fitter.fit(&hyperparameters);
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();
         println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
@@ -112,11 +113,12 @@ mod tests {
     fn test_tgf_grown_fit() {
         let (x, y) = setup_data();
         let tgf_fitter = TreeGridFamilyGrownFitter::new(x.view(), y.view());
-        let (fit_result, _) = tgf_fitter.fit(TreeGridFamilyGrownParams {
+        let hyperparameters = TreeGridFamilyGrownParams {
             n_iter: 100,
             m_try: 1.0,
             split_try: 10,
-        });
+        };
+        let (fit_result, _) = tgf_fitter.fit(&hyperparameters);
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();
         println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
@@ -131,13 +133,14 @@ mod tests {
         let (x, y) = setup_data();
         let tgf_fitter: TreeGridFamilyFitter<'_, GrownVariant> =
             TreeGridFamilyFitter::new(x.view(), y.view());
-
-        let (fit_result, _) = tgf_fitter.fit(TreeGridFamilyGrownParams {
-            n_iter: 100,
-            m_try: 1.0,
-            split_try: 10,
-        });
-
+        
+            let hyperparameters = TreeGridFamilyGrownParams {
+                n_iter: 100,
+                m_try: 1.0,
+                split_try: 10,
+            };
+            let (fit_result, _) = tgf_fitter.fit(&hyperparameters);
+    
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();
         println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
@@ -152,12 +155,13 @@ mod tests {
         let (x, y) = setup_data();
         let tgf_fitter: TreeGridFamilyFitter<'_, GrownVariant> =
             TreeGridFamilyFitter::new(x.view(), y.view());
-        let (fit_result, tgf) = tgf_fitter.fit(TreeGridFamilyGrownParams {
+        let hyperparameters = TreeGridFamilyGrownParams {
             n_iter: 100,
             m_try: 1.0,
             split_try: 10,
-        });
-
+        };
+        let (fit_result, tgf) = tgf_fitter.fit(&hyperparameters);
+    
         let pred = tgf.predict(x.view());
         let diff = fit_result.y_hat - pred;
         assert!(diff.iter().all(|&x| x < 1e-6));

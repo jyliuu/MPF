@@ -52,7 +52,7 @@ impl<'a> FitAndPredictStrategy<'a> for BaggedVariant {
     fn fit(
         x: Self::Features,
         y: Self::Labels,
-        hyperparameters: Self::HyperParameters,
+        hyperparameters: &Self::HyperParameters,
     ) -> (FitResult, Self::Model) {
         TreeGridFamilyBaggedFitter::new(x, y).fit(hyperparameters)
     }
@@ -78,29 +78,20 @@ impl<'a> ModelFitter for TreeGridFamilyBaggedFitter<'a> {
 
     fn fit(
         self,
-        hyperparameters: Self::HyperParameters,
+        hyperparameters: &Self::HyperParameters,
     ) -> (FitResult, TreeGridFamily<BaggedVariant>) {
         let TreeGridFamilyBaggedParams { B, tg_params } = hyperparameters;
-        let TreeGridParams {
-            n_iter,
-            split_try,
-            colsample_bytree,
-        } = tg_params;
         let mut rng = rand::thread_rng();
         let mut tree_grids = vec![];
 
         let n = self.x.nrows();
 
-        for b in 0..B {
+        for b in 0..*B {
             let sample_indices: Vec<usize> = (0..n).map(|_| rng.gen_range(0..n)).collect();
             let x_sample = self.x.select(ndarray::Axis(0), &sample_indices);
             let y_sample = self.y.select(ndarray::Axis(0), &sample_indices);
             let tg_fitter = TreeGridFitter::new(x_sample.view(), y_sample.view());
-            let (fit_res, tg): (FitResult, FittedTreeGrid) = tg_fitter.fit(TreeGridParams {
-                n_iter,
-                split_try,
-                colsample_bytree,
-            });
+            let (fit_res, tg): (FitResult, FittedTreeGrid) = tg_fitter.fit(tg_params);
             println!("b: {:?}, err: {:?}", b, fit_res.err);
             tree_grids.push(tg);
         }
