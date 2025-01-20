@@ -15,11 +15,11 @@ pub trait FittedModel {
     fn predict(&self, x: ArrayView2<f64>) -> Array1<f64>;
 }
 
-pub trait ModelFitter<'a> {
+pub trait ModelFitter {
     type Model: FittedModel;
     type HyperParameters;
-    type Features: 'a;
-    type Labels: 'a;
+    type Features;
+    type Labels;
 
     fn new(x: Self::Features, y: Self::Labels) -> Self;
     fn fit(self, hyperparameters: Self::HyperParameters) -> (FitResult, Self::Model);

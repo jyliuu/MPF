@@ -28,7 +28,7 @@ pub struct TreeGridFamilyFitter<'a, T: FitAndPredictStrategy<'a>> {
 #[derive(Debug)]
 pub struct TreeGridFamily<T>(T, Vec<FittedTreeGrid>);
 
-impl<'a, T> ModelFitter<'a> for TreeGridFamilyFitter<'a, T>
+impl<'a, T> ModelFitter for TreeGridFamilyFitter<'a, T>
 where
     TreeGridFamily<T>: FittedModel,
     T: FitAndPredictStrategy<'a> + Default,
@@ -90,8 +90,7 @@ mod tests {
     #[test]
     fn test_tgf_bagged_fit() {
         let (x, y) = setup_data();
-        let tgf_fitter: TreeGridFamilyBaggedFitter<'_> =
-            TreeGridFamilyBaggedFitter::new(x.view(), y.view());
+        let tgf_fitter = TreeGridFamilyBaggedFitter::new(x.view(), y.view());
         let (fit_result, _) = tgf_fitter.fit(TreeGridFamilyBaggedParams {
             B: 100,
             tg_params: TreeGridParams {

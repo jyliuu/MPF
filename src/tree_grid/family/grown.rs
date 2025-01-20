@@ -152,7 +152,7 @@ impl TreeGridFamilyGrownFitter<'_> {
     }
 }
 
-impl<'a> ModelFitter<'a> for TreeGridFamilyGrownFitter<'a> {
+impl<'a> ModelFitter for TreeGridFamilyGrownFitter<'a> {
     type HyperParameters = TreeGridFamilyGrownParams;
     type Model = TreeGridFamily<GrownVariant>;
     type Features = ArrayView2<'a, f64>;

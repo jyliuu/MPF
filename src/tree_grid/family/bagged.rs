@@ -66,7 +66,7 @@ pub struct TreeGridFamilyBaggedFitter<'a> {
     pub y: ArrayView1<'a, f64>,
 }
 
-impl<'a> ModelFitter<'a> for TreeGridFamilyBaggedFitter<'a> {
+impl<'a> ModelFitter for TreeGridFamilyBaggedFitter<'a> {
     type Features = ArrayView2<'a, f64>;
     type Labels = ArrayView1<'a, f64>;
     type Model = TreeGridFamily<BaggedVariant>;
