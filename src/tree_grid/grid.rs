@@ -96,11 +96,7 @@ mod tests {
         let (x, y) = setup_data();
         let tree_grid_fitter = TreeGridFitter::new(x.view(), y.view());
 
-        let (fit_result, tree_grid) = tree_grid_fitter.fit(TreeGridParams {
-            n_iter: 50,
-            split_try: 10,
-            colsample_bytree: 1.0,
-        });
+        let (fit_result, tree_grid) = tree_grid_fitter.fit(TreeGridParams::default());
 
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();
@@ -115,11 +111,7 @@ mod tests {
     fn test_model_predict() {
         let (x, y) = setup_data();
         let tree_grid_fitter = TreeGridFitter::new(x.view(), y.view());
-        let (fit_result, tree_grid) = tree_grid_fitter.fit(TreeGridParams {
-            n_iter: 50,
-            split_try: 10,
-            colsample_bytree: 1.0,
-        });
+        let (fit_result, tree_grid) = tree_grid_fitter.fit(TreeGridParams::default());
 
         let y_hat = tree_grid.predict(x.view());
         let diff = &fit_result.y_hat - &y_hat;

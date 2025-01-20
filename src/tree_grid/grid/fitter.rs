@@ -27,6 +27,16 @@ pub struct TreeGridParams {
     pub colsample_bytree: f64,
 }
 
+impl Default for TreeGridParams {
+    fn default() -> Self {
+        TreeGridParams {
+            n_iter: 50,
+            split_try: 10,
+            colsample_bytree: 1.0,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct SliceCandidate {
     col: usize,
@@ -279,7 +289,7 @@ impl TreeGridFitter<'_> {
     }
 }
 
-impl<'a> ModelFitter<'a> for TreeGridFitter<'a> {
+impl<'a> ModelFitter for TreeGridFitter<'a> {
     type HyperParameters = TreeGridParams;
     type Model = FittedTreeGrid;
     type Features = ArrayView2<'a, f64>;
