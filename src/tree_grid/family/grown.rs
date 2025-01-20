@@ -38,23 +38,23 @@ pub struct TreeGridFamilyGrownParams {
     pub split_try: usize,
 }
 
-impl<'a> FitAndPredictStrategy<'a> for GrownVariant {
-    type HyperParameters = TreeGridFamilyGrownParams;
-    type Model = TreeGridFamily<GrownVariant>;
-    type Features = ArrayView2<'a, f64>;
-    type Labels = ArrayView1<'a, f64>;
+// impl FitAndPredictStrategy for GrownVariant {
+//     type HyperParameters = TreeGridFamilyGrownParams;
+//     type Model = TreeGridFamily<GrownVariant>;
+//     type Features = ArrayView2<'a, f64>;
+//     type Labels = ArrayView1<'a, f64>;
 
-    fn fit(
-        x: Self::Features,
-        y: Self::Labels,
-        hyperparameters: &Self::HyperParameters,
-    ) -> (FitResult, Self::Model) {
-        TreeGridFamilyGrownFitter::new(x, y).fit(hyperparameters)
-    }
-    fn predict(model: Self::Model, x: Self::Features) -> Array1<f64> {
-        model.predict(x)
-    }
-}
+//     fn fit(
+//         x: Self::Features,
+//         y: Self::Labels,
+//         hyperparameters: &Self::HyperParameters,
+//     ) -> (FitResult, Self::Model) {
+//         TreeGridFamilyGrownFitter::new(x, y).fit(hyperparameters)
+//     }
+//     fn predict(model: Self::Model, x: Self::Features) -> Array1<f64> {
+//         model.predict(x)
+//     }
+// }
 
 pub struct TreeGridFamilyGrownFitter<'a> {
     dims: usize,

@@ -43,23 +43,23 @@ pub struct TreeGridFamilyBaggedParams {
     pub tg_params: TreeGridParams,
 }
 
-impl<'a> FitAndPredictStrategy<'a> for BaggedVariant {
-    type HyperParameters = TreeGridFamilyBaggedParams;
-    type Model = TreeGridFamily<BaggedVariant>;
-    type Features = ArrayView2<'a, f64>;
-    type Labels = ArrayView1<'a, f64>;
+// impl<'a> FitAndPredictStrategy<'a> for BaggedVariant {
+//     type HyperParameters = TreeGridFamilyBaggedParams;
+//     type Model = TreeGridFamily<BaggedVariant>;
+//     type Features = ArrayView2<'a, f64>;
+//     type Labels = ArrayView1<'a, f64>;
 
-    fn fit(
-        x: Self::Features,
-        y: Self::Labels,
-        hyperparameters: &Self::HyperParameters,
-    ) -> (FitResult, Self::Model) {
-        TreeGridFamilyBaggedFitter::new(x, y).fit(hyperparameters)
-    }
-    fn predict(model: Self::Model, x: Self::Features) -> Array1<f64> {
-        model.predict(x)
-    }
-}
+//     fn fit(
+//         x: Self::Features,
+//         y: Self::Labels,
+//         hyperparameters: &Self::HyperParameters,
+//     ) -> (FitResult, Self::Model) {
+//         TreeGridFamilyBaggedFitter::new(x, y).fit(hyperparameters)
+//     }
+//     fn predict(model: Self::Model, x: Self::Features) -> Array1<f64> {
+//         model.predict(x)
+//     }
+// }
 
 pub struct TreeGridFamilyBaggedFitter<'a> {
     pub x: ArrayView2<'a, f64>,
