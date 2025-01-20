@@ -2,19 +2,14 @@ use ndarray::{ArrayView1, ArrayView2};
 
 use crate::{
     tree_grid::family::{
-        bagged::BaggedVariant,
-        grown::{GrownVariant, TreeGridFamilyGrownParams},
-        TreeGridFamily, TreeGridFamilyFitter,
+        bagged::{BaggedVariant, TreeGridFamilyBaggedFitter, TreeGridFamilyBaggedParams},
+        grown::{GrownVariant, TreeGridFamilyGrownFitter, TreeGridFamilyGrownParams},
+        TreeGridFamily,
     },
     FitResult, ModelFitter,
 };
 
 use super::mpf::MPF;
-
-pub struct MPFFitter<'a> {
-    pub x: ArrayView2<'a, f64>,
-    pub y: ArrayView1<'a, f64>,
-}
 
 pub struct MPFParams {
     pub n_families: usize,
@@ -23,66 +18,87 @@ pub struct MPFParams {
     pub split_try: usize,
 }
 
-impl<'a> MPFFitter<'a> {
-    pub fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
-        Self { x, y }
-    }
+pub struct MPFBaggedParams {
+    pub epochs: usize,
+    pub tgf_params: TreeGridFamilyBaggedParams,
+}
 
-    pub fn fit_grown(
-        self,
-        hyperparameters: MPFParams,
-    ) -> (FitResult, MPF<TreeGridFamily<GrownVariant>>) {
-        let MPFParams {
-            n_families,
+pub fn fit_grown<'a>(
+    x: ArrayView2<'a, f64>,
+    y: ArrayView1<'a, f64>,
+    hyperparameters: MPFParams,
+) -> (FitResult, MPF<TreeGridFamily<GrownVariant>>) {
+    let MPFParams {
+        n_families,
+        n_iter,
+        m_try,
+        split_try,
+    } = hyperparameters;
+    let mut fitted_tree_grid_families = Vec::new();
+    let mut fit_results = Vec::new();
+    for _ in 0..n_families {
+        let tg_family_fitter = TreeGridFamilyGrownFitter::new(x, y);
+        let (tgf_fit_result, tree_grid_family) = tg_family_fitter.fit(&TreeGridFamilyGrownParams {
             n_iter,
             m_try,
             split_try,
-        } = hyperparameters;
-        let mut fitted_tree_grid_families = Vec::new();
-        let mut fit_results = Vec::new();
-        for _ in 0..n_families {
-            let tg_family_fitter: TreeGridFamilyFitter<'a, GrownVariant> =
-                TreeGridFamilyFitter::new(self.x, self.y);
-            let (tgf_fit_result, tree_grid_family) =
-                tg_family_fitter.fit(TreeGridFamilyGrownParams {
-                    n_iter,
-                    m_try,
-                    split_try,
-                });
-            fitted_tree_grid_families.push(tree_grid_family);
-            fit_results.push(tgf_fit_result);
-        }
-
-        let mut fit_result = fit_results
-            .into_iter()
-            .reduce(|a, b| FitResult {
-                err: 0.0,
-                residuals: a.residuals + b.residuals,
-                y_hat: a.y_hat + b.y_hat,
-            })
-            .unwrap();
-
-        fit_result.residuals /= n_families as f64;
-        fit_result.y_hat /= n_families as f64;
-        fit_result.err = fit_result.residuals.pow2().mean().unwrap();
-
-        (fit_result, MPF::new(fitted_tree_grid_families))
+        });
+        fitted_tree_grid_families.push(tree_grid_family);
+        fit_results.push(tgf_fit_result);
     }
 
-    pub fn fit_bagged(
-        self,
-        hyperparameters: MPFParams,
-    ) -> (FitResult, MPF<TreeGridFamily<BaggedVariant>>) {
-        unimplemented!()
+    let mut fit_result = fit_results
+        .into_iter()
+        .reduce(|a, b| FitResult {
+            err: 0.0,
+            residuals: a.residuals + b.residuals,
+            y_hat: a.y_hat + b.y_hat,
+        })
+        .unwrap();
+
+    fit_result.residuals /= n_families as f64;
+    fit_result.y_hat /= n_families as f64;
+    fit_result.err = fit_result.residuals.pow2().mean().unwrap();
+
+    (fit_result, MPF::new(fitted_tree_grid_families))
+}
+
+pub fn fit_bagged(
+    x: ArrayView2<f64>,
+    y: ArrayView1<f64>,
+    hyperparameters: MPFBaggedParams,
+) -> (FitResult, MPF<TreeGridFamily<BaggedVariant>>) {
+    let MPFBaggedParams { epochs, tgf_params } = hyperparameters;
+
+    // Ensure that x_input and y_input have the same lifetime ('c) during this loop.
+    let i = 0;
+    let mut y_new = y.to_owned();
+    let mut tree_grid_families = Vec::new();
+
+    for _ in 0..epochs {
+        let tg_family_fitter = TreeGridFamilyBaggedFitter::new(x.view(), y_new.view());
+        let (fit_result, tree_grid_family) = tg_family_fitter.fit(&tgf_params);
+        tree_grid_families.push(tree_grid_family);
+        y_new = fit_result.residuals;
     }
+
+    let fit_result = FitResult {
+        err: y_new.pow2().mean().unwrap(),
+        residuals: y_new.clone(),
+        y_hat: -y_new + y,
+    };
+
+    (fit_result, MPF::new(tree_grid_families))
 }
 
 #[cfg(test)]
 mod tests {
-    use csv::ReaderBuilder;
-    use ndarray::{Array1, Array2};
+    use std::ops::Div;
 
-    use crate::FittedModel;
+    use csv::ReaderBuilder;
+    use ndarray::{s, Array1, Array2};
+
+    use crate::{tree_grid::grid::fitter::TreeGridParams, FittedModel};
 
     use super::*;
     fn setup_data() -> (Array2<f64>, Array1<f64>) {
@@ -114,17 +130,71 @@ mod tests {
     #[test]
     fn test_mpf_fit() {
         let (x, y) = setup_data();
-        let mpf_fitter = MPFFitter::new(x.view(), y.view());
-        let (fit_result, _) = mpf_fitter.fit_grown(MPFParams {
-            n_families: 100,
-            n_iter: 100,
-            m_try: 1.0,
-            split_try: 10,
-        });
+        let x_train = x.slice(s![..500, ..]);
+        let y_train = y.slice(s![..500]);
+
+        let x_test = x.slice(s![500.., ..]);
+        let y_test = y.slice(s![500..]);
+
+        let (fit_result, mpf) = fit_grown(
+            x_train,
+            y_train,
+            MPFParams {
+                n_families: 100,
+                n_iter: 100,
+                m_try: 1.0,
+                split_try: 10,
+            },
+        );
 
         let mean = y.mean().unwrap();
-        let base_err = (y - mean).powi(2).mean().unwrap();
-        println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
+        let base_err = y.view().map(|v| v - mean).powi(2).mean().unwrap();
+        let preds = mpf.predict(x_test.view());
+        let test_err: f64 = y_test
+            .indexed_iter()
+            .map(|(i, v)| (v - preds[i]).powi(2).div(y_test.len() as f64))
+            .sum();
+        println! {"Base error: {:?}, Training Error: {:?}, Test Error: {:?}", base_err, fit_result.err, test_err};
+
+        assert!(
+            fit_result.err < base_err,
+            "Error is not less than mean error"
+        );
+    }
+
+    #[test]
+    fn test_mpf_bagged_fit() {
+        let (x, y) = setup_data();
+        let x_train = x.slice(s![..500, ..]);
+        let y_train = y.slice(s![..500]);
+
+        let x_test = x.slice(s![500.., ..]);
+        let y_test = y.slice(s![500..]);
+
+        let (fit_result, mpf) = fit_bagged(
+            x_train,
+            y_train,
+            MPFBaggedParams {
+                epochs: 5,
+                tgf_params: TreeGridFamilyBaggedParams {
+                    B: 100,
+                    tg_params: TreeGridParams {
+                        n_iter: 100,
+                        split_try: 10,
+                        colsample_bytree: 1.0,
+                    },
+                },
+            },
+        );
+        let mean = y.mean().unwrap();
+        let base_err = y.view().map(|v| v - mean).powi(2).mean().unwrap();
+        let preds = mpf.predict(x_test.view());
+        let test_err: f64 = y_test
+            .indexed_iter()
+            .map(|(i, v)| (v - preds[i]).powi(2).div(y_test.len() as f64))
+            .sum();
+        println! {"Base error: {:?}, Training Error: {:?}, Test Error: {:?}", base_err, fit_result.err, test_err};
+
         assert!(
             fit_result.err < base_err,
             "Error is not less than mean error"
@@ -134,13 +204,16 @@ mod tests {
     #[test]
     fn test_mpf_predict() {
         let (x, y) = setup_data();
-        let mpf_fitter = MPFFitter::new(x.view(), y.view());
-        let (fit_result, mpf) = mpf_fitter.fit_grown(MPFParams {
-            n_families: 100,
-            n_iter: 100,
-            m_try: 1.0,
-            split_try: 10,
-        });
+        let (fit_result, mpf) = fit_grown(
+            x.view(),
+            y.view(),
+            MPFParams {
+                n_families: 100,
+                n_iter: 100,
+                m_try: 1.0,
+                split_try: 10,
+            },
+        );
         let pred = mpf.predict(x.view());
         let diff = fit_result.y_hat - pred;
         assert!(diff.iter().all(|&x| x < 1e-6));
