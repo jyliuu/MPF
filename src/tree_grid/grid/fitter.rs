@@ -145,29 +145,25 @@ pub fn find_refine_candidate(
         .filter(|(_, &x)| x == index)
         .map(|(i, _)| i)
         .collect();
-
-    let curr_points = x.select(Axis(0), &curr_leaf_points_idx);
+    let curr_leaf_leaf_points = leaf_points.select(Axis(0), &curr_leaf_points_idx);
 
     for leaf in &leaves {
         let v = compute_leaf_values(leaf, grid_values);
+        let v_pow2 = v.powi(2);
+        for (idx, row) in curr_leaf_leaf_points.axis_iter(Axis(0)).enumerate() {
+            if row != leaf {
+                continue;
+            }
 
-        let (resids_a, resids_b): (Vec<_>, Vec<_>) = leaf_points
-            .select(Axis(0), &curr_leaf_points_idx)
-            .axis_iter(Axis(0))
-            .enumerate()
-            .filter_map(|(i, row)| {
-                if row == leaf {
-                    Some((residuals[i], x[(i, col)] < split))
-                } else {
-                    None
-                }
-            })
-            .partition(|(_, is_a)| *is_a);
-
-        n_a += v.powi(2) * resids_a.len() as f64;
-        n_b += v.powi(2) * resids_b.len() as f64;
-        m_a += v * resids_a.into_iter().map(|(r, _)| r).sum::<f64>();
-        m_b += v * resids_b.into_iter().map(|(r, _)| r).sum::<f64>();
+            let idx = curr_leaf_points_idx[idx];
+            if x[(idx, col)] < split {
+                n_a += v_pow2;
+                m_a += v * residuals[idx];
+            } else {
+                n_b += v_pow2;
+                m_b += v * residuals[idx];
+            }
+        }
     }
 
     let update_a = if n_a == 0.0 { 1.0 } else { m_a / n_a + 1.0 };
@@ -177,6 +173,8 @@ pub fn find_refine_candidate(
         .select(Axis(0), &curr_leaf_points_idx)
         .pow2()
         .sum();
+    
+    let curr_points = x.select(Axis(0), &curr_leaf_points_idx);
 
     let (a_points_idx, b_points_idx): (Vec<_>, Vec<_>) = curr_points
         .index_axis(Axis(1), col)
@@ -384,22 +382,91 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
 
 #[cfg(test)]
 mod tests {
+    use ndarray::s;
+
     use super::*;
 
+    macro_rules! assert_float_eq {
+        ($x:expr, $y:expr, $d:expr) => {
+            assert!(($x - $y).abs() < $d);
+        };
+    }
+
     fn setup_data() -> (Array2<f64>, Array1<f64>) {
-        let x = Array2::from_shape_vec(
-            (6, 2),
-            vec![0.1, 0.2, 0.3, 0.5, 0.7, 0.6, 1.1, 1.2, 1.3, 1.5, 1.7, 1.6],
+        let dat = Array2::from_shape_vec(
+            (20, 3),
+            vec![
+                1.99591859675606,
+                -1.00591398212174,
+                -1.47348548786449,
+                -0.290104994456985,
+                -0.507165037206491,
+                -0.0992586787398358,
+                -0.392657438987142,
+                1.41894909677495,
+                -0.674415207533763,
+                0.541774508623095,
+                0.134065164928921,
+                0.634093564547107,
+                0.981026718908818,
+                0.29864258176132,
+                1.29321982986182,
+                2.14226826821187,
+                -1.57541477899575,
+                -1.20864031274097,
+                0.614259969810645,
+                -1.11273947093321,
+                -0.747582520955759,
+                0.742939152591961,
+                0.367035148375779,
+                0.629260294753607,
+                -2.90764791321527,
+                1.81674051159666,
+                -1.27652692983198,
+                -1.94290907058012,
+                2.5208012003232,
+                -0.871450106365531,
+                0.272189306719476,
+                1.01227462627796,
+                -0.356579330585395,
+                0.481004283284028,
+                0.165976176377298,
+                0.822063375479486,
+                -0.245353149162764,
+                -1.40974327898294,
+                -0.334709204672301,
+                -0.00460477602051997,
+                0.0117210317817887,
+                2.69171682068671,
+                0.359824874802531,
+                0.821234081234943,
+                -0.318909828758849,
+                -1.88722434288848,
+                -1.01377986818573,
+                0.400700584291665,
+                -0.141615483262696,
+                0.128123583066683,
+                -1.59321040126916,
+                0.136218360404787,
+                0.112778041636902,
+                0.0942204942429378,
+                2.20921149756541,
+                0.882698443188986,
+                0.852817759799762,
+                -2.73007802370526,
+                -1.21615404372871,
+                0.633442434384728,
+            ],
         )
         .unwrap();
 
-        let y = Array1::from_vec(vec![0.5, 0.5, 0.5, 1.5, 1.5, 1.5]);
-
+        let y = dat.slice(s![.., 0]).to_owned();
+        let x = dat.slice(s![.., 1..]).to_owned();
         (x, y)
     }
 
     #[test]
-    fn test_tree_grid_refine_candidate() {
+    fn test_tree_grid_slice_refine_candidate() {
         let (x, y) = setup_data();
         let tree_grid = TreeGridFitter::new(x.view(), y.view());
         let slice_candidate = find_slice_candidate(&tree_grid.splits, &tree_grid.intervals, 0, 1.0);
@@ -412,32 +479,110 @@ mod tests {
             tree_grid.residuals.view(),
             tree_grid.y_hat.view(),
         );
-        assert_eq!(refine_candidate.update_a, 0.5);
-        assert_eq!(refine_candidate.update_b, 1.5);
+        assert_eq!(
+            refine_candidate.a_points_idx,
+            vec![0, 1, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+        );
+        assert_eq!(refine_candidate.b_points_idx, vec![2, 8, 9, 10]);
+        assert_float_eq!(refine_candidate.update_a, -93.53056943616252, 1e-10);
+        assert_float_eq!(refine_candidate.update_b, 379.12227774465015, 1e-10);
     }
 
     #[test]
-    fn test_tree_grid_slice_and_refine() {
+    fn test_tree_grid_multiple_refines() {
         let (x, y) = setup_data();
-        let mut tree_grid = TreeGridFitter::new(x.view(), y.view());
 
-        let slice_candidate = find_slice_candidate(&tree_grid.splits, &tree_grid.intervals, 0, 1.0);
-        let (_, _, refine_candidate) = find_refine_candidate(
-            slice_candidate,
-            x.view(),
-            &tree_grid.leaf_points,
-            &tree_grid.grid_values,
-            &tree_grid.intervals,
-            tree_grid.residuals.view(),
-            tree_grid.y_hat.view(),
-        );
-        tree_grid.update_tree(refine_candidate);
-        assert_eq!(tree_grid.grid_values[0], vec![0.5, 1.5]);
-        assert_eq!(tree_grid.splits[0], vec![1.0]);
-        assert_eq!(
-            tree_grid.intervals[0],
-            vec![(f64::NEG_INFINITY, 1.0), (1.0, f64::INFINITY)]
-        );
-        assert_eq!(tree_grid.residuals.sum(), 0.0);
+        let find_refine_candidate_closure =
+            |tree_grid: &TreeGridFitter<'_>, slice_candidate| -> (f64, f64, RefineCandidate) {
+                find_refine_candidate(
+                    slice_candidate,
+                    x.view(),
+                    &tree_grid.leaf_points,
+                    &tree_grid.grid_values,
+                    &tree_grid.intervals,
+                    tree_grid.residuals.view(),
+                    tree_grid.y_hat.view(),
+                )
+            };
+        let mut tree_grid = TreeGridFitter::new(x.view(), y.view());
+        {
+            let slice_candidate =
+                find_slice_candidate(&tree_grid.splits, &tree_grid.intervals, 0, x[[8, 0]]);
+            let (err_new, err_old, refine_candidate) =
+                find_refine_candidate_closure(&tree_grid, slice_candidate);
+
+            assert_float_eq!(err_new, 26.61921453887834, 1e-10);
+            assert_float_eq!(err_old, 39.65496224200821, 1e-10);
+            assert_float_eq!(refine_candidate.update_a, -81.09657885629389, 1e-10);
+            assert_float_eq!(refine_candidate.update_b, 739.869209706645, 1e-10);
+            tree_grid.update_tree(refine_candidate);
+        }
+        {
+            let slice_candidate =
+                find_slice_candidate(&tree_grid.splits, &tree_grid.intervals, 0, x[[12, 0]]);
+            let (err_new, err_old, refine_candidate) =
+                find_refine_candidate_closure(&tree_grid, slice_candidate);
+
+            assert_float_eq!(err_new, 22.425727245741378, 1e-10);
+            assert_float_eq!(err_old, 26.153854021633833, 1e-10);
+            assert_float_eq!(refine_candidate.update_a, 8.058693908258093, 1e-10);
+            assert_float_eq!(refine_candidate.update_b, 0.5847827112789354, 1e-10);
+            tree_grid.update_tree(refine_candidate);
+        }
+        {
+            let slice_candidate =
+                find_slice_candidate(&tree_grid.splits, &tree_grid.intervals, 0, x[[0, 0]]);
+            let (err_new, err_old, refine_candidate) =
+                find_refine_candidate_closure(&tree_grid, slice_candidate);
+            assert_float_eq!(err_new, 14.671443409333211, 1e-10);
+            assert_float_eq!(err_old, 22.425727245741378, 1e-10);
+            assert_float_eq!(refine_candidate.update_a, -6.832210436114132, 1e-10);
+            assert_float_eq!(refine_candidate.update_b, 3.409910903419733, 1e-10);
+            tree_grid.update_tree(refine_candidate);
+        }
+        {
+            let slice_candidate =
+                find_slice_candidate(&tree_grid.splits, &tree_grid.intervals, 1, x[[15, 1]]);
+            let (err_new, err_old, refine_candidate) =
+                find_refine_candidate_closure(&tree_grid, slice_candidate);
+            assert_float_eq!(err_new, 11.248401175931308, 1e-10);
+            assert_float_eq!(err_old, 15.136803926577713, 1e-10);
+            assert_float_eq!(refine_candidate.update_a, 0.8256919200067316, 1e-10);
+            assert_float_eq!(refine_candidate.update_b, 1.9098338089112117, 1e-10);
+            tree_grid.update_tree(refine_candidate);
+        }
+        {
+            let slice_candidate =
+                find_slice_candidate(&tree_grid.splits, &tree_grid.intervals, 1, x[[6, 1]]);
+            let (err_new, err_old, refine_candidate) =
+                find_refine_candidate_closure(&tree_grid, slice_candidate);
+            assert_float_eq!(err_new, 3.9199063400989016, 1e-10);
+            assert_float_eq!(err_old, 7.692086523143316, 1e-10);
+            assert_float_eq!(refine_candidate.update_a, 1.2412453820291502, 1e-10);
+            assert_float_eq!(refine_candidate.update_b, -0.11462749920417181, 1e-10);
+            tree_grid.update_tree(refine_candidate);
+        }
+        {
+            let slice_candidate =
+                find_slice_candidate(&tree_grid.splits, &tree_grid.intervals, 0, x[[13, 0]]);
+            let (err_new, err_old, refine_candidate) =
+                find_refine_candidate_closure(&tree_grid, slice_candidate);
+            assert_float_eq!(err_new, 3.5819148122645306, 1e-10);
+            assert_float_eq!(err_old, 6.104930626516536, 1e-10);
+            assert_float_eq!(refine_candidate.update_a, 3.691670930826113, 1e-10);
+            assert_float_eq!(refine_candidate.update_b, 0.7617522326677412, 1e-10);
+            tree_grid.update_tree(refine_candidate);
+        }
+        {
+            let slice_candidate =
+                find_slice_candidate(&tree_grid.splits, &tree_grid.intervals, 0, x[[14, 0]]);
+            let (err_new, err_old, refine_candidate) =
+                find_refine_candidate_closure(&tree_grid, slice_candidate);
+            assert_float_eq!(err_new, 1.1863917023933575, 1e-10);
+            assert_float_eq!(err_old, 3.5708191124576096, 1e-10);
+            assert_float_eq!(refine_candidate.update_a, 0.6518311983217222, 1e-10);
+            assert_float_eq!(refine_candidate.update_b, 2.828492111820738, 1e-10);
+            tree_grid.update_tree(refine_candidate);
+        }
     }
 }
