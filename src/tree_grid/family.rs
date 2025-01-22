@@ -59,7 +59,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use bagged::{TreeGridFamilyBaggedFitter, TreeGridFamilyBaggedParams};
+    use bagged::TreeGridFamilyBaggedParams;
     use csv::ReaderBuilder;
     use grown::TreeGridFamilyGrownParams;
     use ndarray::Array2;
@@ -96,7 +96,6 @@ mod tests {
     #[test]
     fn test_tgf_bagged_fit() {
         let (x, y) = setup_data();
-        let tgf_fitter = TreeGridFamilyBaggedFitter::new(x.view(), y.view());
         let hyperparameters = TreeGridFamilyBaggedParams {
             B: 100,
             tg_params: TreeGridParams {
@@ -105,7 +104,7 @@ mod tests {
                 colsample_bytree: 1.0,
             },
         };
-        let (fit_result, _) = tgf_fitter.fit(&hyperparameters);
+        let (fit_result, _) = bagged::fit(x.view(), y.view(), &hyperparameters);
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();
         println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);

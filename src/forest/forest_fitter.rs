@@ -2,11 +2,11 @@ use ndarray::{ArrayView1, ArrayView2};
 
 use crate::{
     tree_grid::family::{
-        bagged::{BaggedVariant, TreeGridFamilyBaggedFitter, TreeGridFamilyBaggedParams},
+        bagged::{self, BaggedVariant, TreeGridFamilyBaggedParams},
         grown::{self, GrownVariant, TreeGridFamilyGrownParams},
         TreeGridFamily,
     },
-    FitResult, ModelFitter,
+    FitResult,
 };
 
 use super::mpf::MPF;
@@ -79,8 +79,7 @@ pub fn fit_bagged(
     let mut tree_grid_families = Vec::new();
 
     for _ in 0..epochs {
-        let tg_family_fitter = TreeGridFamilyBaggedFitter::new(x.view(), y_new.view());
-        let (fit_result, tree_grid_family) = tg_family_fitter.fit(&tgf_params);
+        let (fit_result, tree_grid_family) = bagged::fit(x.view(), y.view(), &tgf_params);
         tree_grid_families.push(tree_grid_family);
         y_new = fit_result.residuals;
     }
