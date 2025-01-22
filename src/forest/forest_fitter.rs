@@ -130,11 +130,13 @@ mod tests {
     #[test]
     fn test_mpf_fit() {
         let (x, y) = setup_data();
-        let x_train = x.slice(s![..500, ..]);
-        let y_train = y.slice(s![..500]);
+        let n = y.len();
+        println!("Fitting and testing on {} samples", n / 2);
+        let x_train = x.slice(s![..n / 2, ..]);
+        let y_train = y.slice(s![..n / 2]);
 
-        let x_test = x.slice(s![500.., ..]);
-        let y_test = y.slice(s![500..]);
+        let x_test = x.slice(s![n / 2.., ..]);
+        let y_test = y.slice(s![n / 2..]);
 
         let (fit_result, mpf) = fit_grown(
             x_train,
@@ -147,8 +149,8 @@ mod tests {
             },
         );
 
-        let mean = y.mean().unwrap();
-        let base_err = y.view().map(|v| v - mean).powi(2).mean().unwrap();
+        let mean = y_test.mean().unwrap();
+        let base_err = y_test.view().map(|v| v - mean).powi(2).mean().unwrap();
         let preds = mpf.predict(x_test.view());
         let test_err: f64 = y_test
             .indexed_iter()
@@ -165,11 +167,13 @@ mod tests {
     #[test]
     fn test_mpf_bagged_fit() {
         let (x, y) = setup_data();
-        let x_train = x.slice(s![..500, ..]);
-        let y_train = y.slice(s![..500]);
+        let n = y.len();
+        println!("Fitting and testing on {} samples", n / 2);
+        let x_train = x.slice(s![..n / 2, ..]);
+        let y_train = y.slice(s![..n / 2]);
 
-        let x_test = x.slice(s![500.., ..]);
-        let y_test = y.slice(s![500..]);
+        let x_test = x.slice(s![n / 2.., ..]);
+        let y_test = y.slice(s![n / 2..]);
 
         let (fit_result, mpf) = fit_bagged(
             x_train,
@@ -186,8 +190,8 @@ mod tests {
                 },
             },
         );
-        let mean = y.mean().unwrap();
-        let base_err = y.view().map(|v| v - mean).powi(2).mean().unwrap();
+        let mean = y_test.mean().unwrap();
+        let base_err = y_test.view().map(|v| v - mean).powi(2).mean().unwrap();
         let preds = mpf.predict(x_test.view());
         let test_err: f64 = y_test
             .indexed_iter()
