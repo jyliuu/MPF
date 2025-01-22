@@ -6,9 +6,20 @@ use std::ops::{Deref, DerefMut};
 use numpy::{PyArray1, ToPyArray};
 
 use mpf::{
-    tree_grid::grid::{
-        fitter::{TreeGridFitter, TreeGridParams},
-        FittedTreeGrid,
+    forest::{
+        forest_fitter::{fit_bagged, MPFBaggedParams},
+        mpf::MPF,
+    },
+    tree_grid::{
+        family::{
+            bagged::{BaggedVariant, TreeGridFamilyBaggedParams},
+            grown::GrownVariant,
+            TreeGridFamily,
+        },
+        grid::{
+            fitter::{TreeGridFitter, TreeGridParams},
+            FittedTreeGrid,
+        },
     },
     FitResult, FittedModel, ModelFitter,
 };
@@ -49,6 +60,87 @@ impl Deref for FitResultPy {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+#[derive(Debug)]
+#[pyclass(name = "MPFBagged")]
+pub struct MPFBaggedPy(MPF<TreeGridFamily<BaggedVariant>>);
+
+impl From<MPF<TreeGridFamily<BaggedVariant>>> for MPFBaggedPy {
+    fn from(mpf: MPF<TreeGridFamily<BaggedVariant>>) -> Self {
+        MPFBaggedPy(mpf)
+    }
+}
+
+#[derive(Debug)]
+#[pyclass(name = "MPFGrown")]
+pub struct MPFGrownPy(MPF<TreeGridFamily<GrownVariant>>);
+
+impl From<MPF<TreeGridFamily<GrownVariant>>> for MPFGrownPy {
+    fn from(mpf: MPF<TreeGridFamily<GrownVariant>>) -> Self {
+        MPFGrownPy(mpf)
+    }
+}
+
+#[pymethods]
+impl MPFBaggedPy {
+    #[getter]
+    pub fn get_tree_grid_families<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let tree_grid_families_py: Vec<Vec<TreeGridPy>> = self
+            .0
+            .get_tree_grid_families()
+            .iter()
+            .map(|tgf: &TreeGridFamily<BaggedVariant>| {
+                tgf.get_tree_grids()
+                    .iter()
+                    .map(|tg| TreeGridPy(tg.clone()))
+                    .collect()
+            })
+            .collect();
+
+        PyList::new(py, tree_grid_families_py)
+    }
+
+    #[pyo3(name = "predict")]
+    pub fn _predict<'py>(
+        &self,
+        py: Python<'py>,
+        x: PyReadonlyArray2<'py, f64>,
+    ) -> PyResult<Bound<'py, PyArray1<f64>>> {
+        let x = x.as_array();
+        let y_hat = self.0.predict(x);
+        Ok(y_hat.to_pyarray(py))
+    }
+
+    #[classmethod]
+    #[pyo3(name = "fit")]
+    #[allow(clippy::too_many_arguments)]
+    pub fn _fit<'py>(
+        _cls: &Bound<'_, PyType>,
+        x: PyReadonlyArray2<'py, f64>,
+        y: PyReadonlyArray1<'py, f64>,
+        epochs: usize,
+        B: usize,
+        n_iter: usize,
+        split_try: usize,
+        colsample_bytree: f64,
+    ) -> PyResult<(MPFBaggedPy, FitResultPy)> {
+        let x = x.as_array();
+        let y = y.as_array();
+        let params = MPFBaggedParams {
+            epochs,
+            tgf_params: TreeGridFamilyBaggedParams {
+                B,
+                tg_params: TreeGridParams {
+                    n_iter,
+                    split_try,
+                    colsample_bytree,
+                },
+            },
+        };
+        let (fit_result, mpf) = fit_bagged(x, y, params);
+        Ok((mpf.into(), FitResultPy(fit_result)))
     }
 }
 
@@ -125,7 +217,7 @@ impl FitResultPy {
 
     fn __repr__(&self) -> String {
         format!(
-            "FitResult(err={}, residuals={}, y_hat={})",
+            "FitResult(error={}, residuals={}, y_hat={})",
             self.err, self.residuals, self.y_hat
         )
     }
@@ -135,5 +227,6 @@ impl FitResultPy {
 fn mpf_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<TreeGridPy>()?;
     m.add_class::<FitResultPy>()?;
+    m.add_class::<MPFBaggedPy>()?;
     Ok(())
 }
