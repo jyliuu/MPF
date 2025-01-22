@@ -5,7 +5,7 @@ use crate::FittedModel;
 
 pub mod fitter;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FittedTreeGrid {
     pub splits: Vec<Vec<f64>>,
     pub intervals: Vec<Vec<(f64, f64)>>,
