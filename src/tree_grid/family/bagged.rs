@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{FitAndPredictStrategy, FittedTreeGrid, TreeGridFamily};
-
+#[derive(Debug)]
 pub struct BaggedVariant;
 
 impl Default for BaggedVariant {

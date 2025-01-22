@@ -5,8 +5,15 @@ use crate::{
     FittedModel,
 };
 
+#[derive(Debug)]
 pub struct MPF<T: FittedModel> {
     tree_grid_families: Vec<T>,
+}
+
+impl<T: FittedModel> MPF<T> {
+    pub fn get_tree_grid_families(&self) -> &Vec<T> {
+        &self.tree_grid_families
+    }
 }
 
 impl<T: FittedModel> MPF<T> {

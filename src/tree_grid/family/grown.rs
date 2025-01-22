@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::{FitAndPredictStrategy, TreeGridFamily};
-
+#[derive(Debug)]
 pub struct GrownVariant;
 
 impl Default for GrownVariant {
