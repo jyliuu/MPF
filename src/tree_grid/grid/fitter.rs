@@ -2,7 +2,7 @@ use std::vec;
 
 use itertools::Itertools;
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
-use rand::{seq::SliceRandom, Rng};
+use rand::{seq::index::sample, Rng};
 
 use crate::{FitResult, ModelFitter};
 
@@ -173,7 +173,7 @@ pub fn find_refine_candidate(
         .select(Axis(0), &curr_leaf_points_idx)
         .pow2()
         .sum();
-    
+
     let curr_points = x.select(Axis(0), &curr_leaf_points_idx);
 
     let (a_points_idx, b_points_idx): (Vec<_>, Vec<_>) = curr_points
@@ -317,23 +317,31 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
         let mut rng = rand::thread_rng();
         let n_cols = self.x.ncols();
         let n_rows = self.x.nrows();
+        let n_cols_to_sample = (hyperparameters.colsample_bytree * n_cols as f64) as usize;
 
-        for _ in 0..hyperparameters.n_iter {
-            let n_cols_to_sample = (hyperparameters.colsample_bytree * n_cols as f64) as usize;
-            let split_idx: Vec<usize> = (0..hyperparameters.split_try)
-                .map(|_| rng.gen_range(0..n_rows))
-                .collect();
+        let split_idx: Vec<usize> = sample(
+            &mut rng,
+            n_rows,
+            hyperparameters.split_try * hyperparameters.n_iter,
+        )
+        .into_iter()
+        .collect();
 
-            let mut possible_indices: Vec<usize> = (0..n_cols).collect();
-            possible_indices.shuffle(&mut rng);
+        let col_idx: Vec<usize> = (0..n_cols_to_sample * hyperparameters.n_iter)
+            .map(|_| rng.gen_range(0..n_cols))
+            .collect();
 
-            let col_idx = possible_indices[0..n_cols_to_sample].to_vec();
-
+        for iter in 0..hyperparameters.n_iter {
             let mut best_candidate: Option<RefineCandidate> = None;
             let mut best_err_diff = f64::NEG_INFINITY;
 
-            for &col in &col_idx {
-                for &idx in &split_idx {
+            let curr_it_split_idx = &split_idx
+                [iter * hyperparameters.split_try..(iter + 1) * hyperparameters.split_try];
+
+            let curr_it_col_idx = &col_idx[iter * n_cols_to_sample..(iter + 1) * n_cols_to_sample];
+
+            for &col in curr_it_col_idx {
+                for &idx in curr_it_split_idx {
                     let split = self.x[[idx, col]];
                     let slice_candidate =
                         find_slice_candidate(&self.splits, &self.intervals, col, split);
