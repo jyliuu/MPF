@@ -1,4 +1,4 @@
-use pyo3::prelude::*;
+use pyo3::{prelude::*, types::PyList};
 
 use core::f64;
 use std::ops::{Deref, DerefMut};
@@ -6,11 +6,11 @@ use std::ops::{Deref, DerefMut};
 use numpy::{PyArray1, ToPyArray};
 
 use mpf::{
-    tree_grid::{
-        model::FittedTreeGrid,
-        tree_grid_fitter::{TreeGridFitter, TreeGridParams},
+    tree_grid::grid::{
+        fitter::{TreeGridFitter, TreeGridParams},
+        FittedTreeGrid,
     },
-    FitResult,
+    FitResult, FittedModel, ModelFitter,
 };
 
 use numpy::{PyReadonlyArray1, PyReadonlyArray2};
@@ -54,6 +54,24 @@ impl Deref for FitResultPy {
 
 #[pymethods]
 impl TreeGridPy {
+    #[getter]
+    pub fn get_splits<'py>(&'py self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        // Convert the reference to a PyList
+        PyList::new(py, &self.splits)
+    }
+
+    #[getter]
+    pub fn get_intervals<'py>(&'py self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        // Convert the reference to a PyList
+        PyList::new(py, &self.intervals)
+    }
+
+    #[getter]
+    pub fn get_grid_values<'py>(&'py self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        // Convert the reference to a PyList
+        PyList::new(py, &self.grid_values)
+    }
+
     #[pyo3(name = "predict")]
     pub fn _predict<'py>(
         &self,
@@ -83,21 +101,24 @@ impl TreeGridPy {
             colsample_bytree,
         };
         let tg_fitter = TreeGridFitter::new(x.view(), y.view());
-        let (fit_result, tg) = tg_fitter.fit(params);
+        let (fit_result, tg) = tg_fitter.fit(&params);
         Ok((tg.into(), FitResultPy(fit_result)))
     }
 }
 
 #[pymethods]
 impl FitResultPy {
+    #[getter]
     pub fn get_error(&self) -> f64 {
         self.err
     }
 
+    #[getter]
     pub fn get_residuals<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f64>>> {
         Ok(self.residuals.to_pyarray(py))
     }
 
+    #[getter]
     pub fn get_y_hat<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f64>>> {
         Ok(self.y_hat.to_pyarray(py))
     }
