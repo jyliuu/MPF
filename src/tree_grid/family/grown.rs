@@ -38,25 +38,8 @@ pub struct TreeGridFamilyGrownParams {
     pub split_try: usize,
 }
 
-// impl FitAndPredictStrategy for GrownVariant {
-//     type HyperParameters = TreeGridFamilyGrownParams;
-//     type Model = TreeGridFamily<GrownVariant>;
-//     type Features = ArrayView2<'a, f64>;
-//     type Labels = ArrayView1<'a, f64>;
 
-//     fn fit(
-//         x: Self::Features,
-//         y: Self::Labels,
-//         hyperparameters: &Self::HyperParameters,
-//     ) -> (FitResult, Self::Model) {
-//         TreeGridFamilyGrownFitter::new(x, y).fit(hyperparameters)
-//     }
-//     fn predict(model: Self::Model, x: Self::Features) -> Array1<f64> {
-//         model.predict(x)
-//     }
-// }
-
-pub struct TreeGridFamilyGrownFitter<'a> {
+struct TreeGridFamilyGrownFitter<'a> {
     dims: usize,
     x: ArrayView2<'a, f64>,
     y: ArrayView1<'a, f64>,
@@ -152,117 +135,113 @@ impl TreeGridFamilyGrownFitter<'_> {
     }
 }
 
-impl<'a> ModelFitter for TreeGridFamilyGrownFitter<'a> {
-    type HyperParameters = TreeGridFamilyGrownParams;
-    type Model = TreeGridFamily<GrownVariant>;
-    type Features = ArrayView2<'a, f64>;
-    type Labels = ArrayView1<'a, f64>;
+pub fn fit(
+    x: ArrayView2<f64>,
+    y: ArrayView1<f64>,
+    hyperparameters: &TreeGridFamilyGrownParams,
+) -> (FitResult, TreeGridFamily<GrownVariant>) {
+    let dims = x.shape()[1];
+    let intercept_grid = TreeGridFitter::new(x.view(), y.view());
+    let mut tg_fitters = HashMap::new();
+    let y_hat = intercept_grid.y_hat.clone();
+    let residuals = y.to_owned() - &y_hat;
+    tg_fitters.insert(BTreeSet::new(), vec![intercept_grid]);
 
-    fn new(x: Self::Features, y: Self::Labels) -> Self {
-        let dims = x.shape()[1];
-        let intercept_grid = TreeGridFitter::new(x, y);
-        let mut tg_fitters = HashMap::new();
-        let y_hat = intercept_grid.y_hat.clone();
-        tg_fitters.insert(BTreeSet::new(), vec![intercept_grid]);
+    let mut fitter = TreeGridFamilyGrownFitter {
+        dims,
+        x: x.view(),
+        y: y.view(),
+        tg_fitters,
+        y_hat,
+        residuals,
+    };
 
-        let residuals = y.to_owned() - &y_hat;
+    let TreeGridFamilyGrownParams {
+        n_iter,
+        m_try,
+        split_try,
+    } = *hyperparameters;
+    let mut rng = rand::thread_rng();
 
-        Self {
-            dims,
-            x,
-            y,
-            tg_fitters,
-            y_hat,
-            residuals,
-        }
-    }
+    for _ in 0..n_iter {
+        let potential_splits = fitter.potential_splits();
+        let n_potential_splits = potential_splits.len();
+        let n_splits_to_try = (n_potential_splits as f64 * m_try).ceil() as usize;
 
-    fn fit(
-        mut self,
-        hyperparameters: &Self::HyperParameters,
-    ) -> (FitResult, TreeGridFamily<GrownVariant>) {
-        let TreeGridFamilyGrownParams {
-            n_iter,
-            m_try,
-            split_try,
-        } = *hyperparameters;
-        let mut rng = rand::thread_rng();
+        let mut candidates = Vec::new();
+        let split_indices: Vec<usize> = (0..n_potential_splits).collect();
+        let selected_splits: Vec<usize> = split_indices
+            .choose_multiple(&mut rng, n_splits_to_try)
+            .copied()
+            .collect();
 
-        for _ in 0..n_iter {
-            let potential_splits = self.potential_splits();
-            let n_potential_splits = potential_splits.len();
-            let n_splits_to_try = (n_potential_splits as f64 * m_try).ceil() as usize;
+        for &p_idx in &selected_splits {
+            let (s, dim, sample_tg_idx) = potential_splits[p_idx].clone();
 
-            let mut candidates = Vec::new();
-            let split_indices: Vec<usize> = (0..n_potential_splits).collect();
-            let selected_splits: Vec<usize> = split_indices
-                .choose_multiple(&mut rng, n_splits_to_try)
-                .copied()
-                .collect();
+            let mut best_split = None;
+            let mut best_err_diff = f64::NEG_INFINITY;
 
-            for &p_idx in &selected_splits {
-                let (s, dim, sample_tg_idx) = potential_splits[p_idx].clone();
+            for _ in 0..split_try {
+                let split_idx = rng.gen_range(0..x.nrows());
+                let split_val = x[[split_idx, dim]];
 
-                let mut best_split = None;
-                let mut best_err_diff = f64::NEG_INFINITY;
+                if let Some(tg_fitters) = fitter.tg_fitters.get(&s) {
+                    if let Some(sample_tg) = tg_fitters.get(sample_tg_idx) {
+                        let slice_candidate = find_slice_candidate(
+                            &sample_tg.splits,
+                            &sample_tg.intervals,
+                            dim,
+                            split_val,
+                        );
+                        let (err_new, err_old, refine_candidate) = find_refine_candidate(
+                            slice_candidate,
+                            sample_tg.x,
+                            &sample_tg.leaf_points,
+                            &sample_tg.grid_values,
+                            &sample_tg.intervals,
+                            fitter.residuals.view(),
+                            fitter.y_hat.view(),
+                        );
+                        let err_diff = err_old - err_new;
 
-                for _ in 0..split_try {
-                    let split_idx = rng.gen_range(0..self.x.nrows());
-                    let split_val = self.x[[split_idx, dim]];
-
-                    if let Some(tg_fitters) = self.tg_fitters.get(&s) {
-                        if let Some(sample_tg) = tg_fitters.get(sample_tg_idx) {
-                            let slice_candidate = find_slice_candidate(
-                                &sample_tg.splits,
-                                &sample_tg.intervals,
-                                dim,
-                                split_val,
-                            );
-                            let (err_new, err_old, refine_candidate) = find_refine_candidate(
-                                slice_candidate,
-                                sample_tg.x,
-                                &sample_tg.leaf_points,
-                                &sample_tg.grid_values,
-                                &sample_tg.intervals,
-                                self.residuals.view(),
-                                self.y_hat.view(),
-                            );
-                            let err_diff = err_old - err_new;
-
-                            if err_diff > best_err_diff {
-                                best_err_diff = err_diff;
-                                best_split = Some((s.clone(), sample_tg_idx, refine_candidate));
-                            }
+                        if err_diff > best_err_diff {
+                            best_err_diff = err_diff;
+                            best_split = Some((s.clone(), sample_tg_idx, refine_candidate));
                         }
                     }
                 }
-
-                if let Some(split) = best_split {
-                    candidates.push((best_err_diff, split));
-                }
             }
 
-            if let Some((_, (s, sample_tg_idx, refine_candidate))) =
-                candidates.into_iter().max_by(|a, b| {
-                    let a_diff = a.0;
-                    let b_diff = b.0;
-                    a_diff.partial_cmp(&b_diff).unwrap()
-                })
-            {
-                self.update_estimator(s, sample_tg_idx, refine_candidate);
+            if let Some(split) = best_split {
+                candidates.push((best_err_diff, split));
             }
         }
 
-        (
-            FitResult {
-                err: self.loss(),
-                residuals: self.residuals,
-                y_hat: self.y_hat,
-            },
-            TreeGridFamily(
-                GrownVariant,
-                self.tg_fitters.into_values().flatten().map_into().collect(),
-            ),
-        )
+        if let Some((_, (s, sample_tg_idx, refine_candidate))) =
+            candidates.into_iter().max_by(|a, b| {
+                let a_diff = a.0;
+                let b_diff = b.0;
+                a_diff.partial_cmp(&b_diff).unwrap()
+            })
+        {
+            fitter.update_estimator(s, sample_tg_idx, refine_candidate);
+        }
     }
+
+    (
+        FitResult {
+            err: fitter.loss(),
+            residuals: fitter.residuals,
+            y_hat: fitter.y_hat,
+        },
+        TreeGridFamily(
+            GrownVariant,
+            fitter
+                .tg_fitters
+                .into_values()
+                .flatten()
+                .map_into()
+                .collect(),
+        ),
+    )
 }

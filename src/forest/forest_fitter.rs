@@ -3,7 +3,7 @@ use ndarray::{ArrayView1, ArrayView2};
 use crate::{
     tree_grid::family::{
         bagged::{BaggedVariant, TreeGridFamilyBaggedFitter, TreeGridFamilyBaggedParams},
-        grown::{GrownVariant, TreeGridFamilyGrownFitter, TreeGridFamilyGrownParams},
+        grown::{self, GrownVariant, TreeGridFamilyGrownParams},
         TreeGridFamily,
     },
     FitResult, ModelFitter,
@@ -37,12 +37,15 @@ pub fn fit_grown(
     let mut fitted_tree_grid_families = Vec::new();
     let mut fit_results = Vec::new();
     for _ in 0..n_families {
-        let tg_family_fitter = TreeGridFamilyGrownFitter::new(x.view(), y.view());
-        let (tgf_fit_result, tree_grid_family) = tg_family_fitter.fit(&TreeGridFamilyGrownParams {
-            n_iter,
-            m_try,
-            split_try,
-        });
+        let (tgf_fit_result, tree_grid_family) = grown::fit(
+            x.view(),
+            y.view(),
+            &TreeGridFamilyGrownParams {
+                n_iter,
+                m_try,
+                split_try,
+            },
+        );
         fitted_tree_grid_families.push(tree_grid_family);
         fit_results.push(tgf_fit_result);
     }

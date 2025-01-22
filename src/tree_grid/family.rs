@@ -61,7 +61,7 @@ where
 mod tests {
     use bagged::{TreeGridFamilyBaggedFitter, TreeGridFamilyBaggedParams};
     use csv::ReaderBuilder;
-    use grown::{TreeGridFamilyGrownFitter, TreeGridFamilyGrownParams};
+    use grown::TreeGridFamilyGrownParams;
     use ndarray::Array2;
 
     use crate::tree_grid::grid::fitter::TreeGridParams;
@@ -118,13 +118,12 @@ mod tests {
     #[test]
     fn test_tgf_grown_fit() {
         let (x, y) = setup_data();
-        let tgf_fitter = TreeGridFamilyGrownFitter::new(x.view(), y.view());
         let hyperparameters = TreeGridFamilyGrownParams {
             n_iter: 100,
             m_try: 1.0,
             split_try: 10,
         };
-        let (fit_result, _) = tgf_fitter.fit(&hyperparameters);
+        let (fit_result, _) = grown::fit(x.view(), y.view(), &hyperparameters);
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();
         println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
@@ -135,36 +134,14 @@ mod tests {
     }
 
     #[test]
-    fn test_tgf_fit() {
+    fn test_tgf_grown_predict() {
         let (x, y) = setup_data();
-        let tgf_fitter = TreeGridFamilyGrownFitter::new(x.view(), y.view());
-
         let hyperparameters = TreeGridFamilyGrownParams {
             n_iter: 100,
             m_try: 1.0,
             split_try: 10,
         };
-        let (fit_result, _) = tgf_fitter.fit(&hyperparameters);
-
-        let mean = y.mean().unwrap();
-        let base_err = (y - mean).powi(2).mean().unwrap();
-        println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
-        assert!(
-            fit_result.err < base_err,
-            "Error is not less than mean error"
-        );
-    }
-
-    #[test]
-    fn test_tgf_predict() {
-        let (x, y) = setup_data();
-        let tgf_fitter = TreeGridFamilyGrownFitter::new(x.view(), y.view());
-        let hyperparameters = TreeGridFamilyGrownParams {
-            n_iter: 100,
-            m_try: 1.0,
-            split_try: 10,
-        };
-        let (fit_result, tgf) = tgf_fitter.fit(&hyperparameters);
+        let (fit_result, tgf) = grown::fit(x.view(), y.view(), &hyperparameters);
 
         let pred = tgf.predict(x.view());
         let diff = fit_result.y_hat - pred;
