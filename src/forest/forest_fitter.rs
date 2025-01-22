@@ -23,9 +23,9 @@ pub struct MPFBaggedParams {
     pub tgf_params: TreeGridFamilyBaggedParams,
 }
 
-pub fn fit_grown<'a>(
-    x: ArrayView2<'a, f64>,
-    y: ArrayView1<'a, f64>,
+pub fn fit_grown(
+    x: ArrayView2<f64>,
+    y: ArrayView1<f64>,
     hyperparameters: MPFParams,
 ) -> (FitResult, MPF<TreeGridFamily<GrownVariant>>) {
     let MPFParams {
@@ -37,7 +37,7 @@ pub fn fit_grown<'a>(
     let mut fitted_tree_grid_families = Vec::new();
     let mut fit_results = Vec::new();
     for _ in 0..n_families {
-        let tg_family_fitter = TreeGridFamilyGrownFitter::new(x, y);
+        let tg_family_fitter = TreeGridFamilyGrownFitter::new(x.view(), y.view());
         let (tgf_fit_result, tree_grid_family) = tg_family_fitter.fit(&TreeGridFamilyGrownParams {
             n_iter,
             m_try,
