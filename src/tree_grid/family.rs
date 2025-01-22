@@ -28,6 +28,12 @@ pub struct TreeGridFamilyFitter<T: FitAndPredictStrategy> {
 #[derive(Debug)]
 pub struct TreeGridFamily<T>(T, Vec<FittedTreeGrid>);
 
+impl<T> TreeGridFamily<T> {
+    pub fn get_tree_grids(&self) -> &Vec<FittedTreeGrid> {
+        &self.1
+    }
+}
+
 impl<'a, T> ModelFitter for TreeGridFamilyFitter<T>
 where
     TreeGridFamily<T>: FittedModel,
