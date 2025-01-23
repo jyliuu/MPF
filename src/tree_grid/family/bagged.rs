@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use ndarray::{Array1, ArrayView1, ArrayView2};
 use rand::Rng;
 
@@ -10,17 +12,11 @@ use super::{FittedTreeGrid, TreeGridFamily};
 #[derive(Debug)]
 pub struct BaggedVariant;
 
-impl Default for BaggedVariant {
-    fn default() -> Self {
-        BaggedVariant
-    }
-}
-
 impl FittedModel for TreeGridFamily<BaggedVariant> {
     fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
         let mut result = Array1::ones(x.shape()[0]);
         let mut signs = Array1::from_elem(x.shape()[0], 0.0);
-        for grids in &self.1 {
+        for grids in &self.0 {
             let pred = grids.predict(x.view());
 
             result *= &pred;
@@ -30,7 +26,7 @@ impl FittedModel for TreeGridFamily<BaggedVariant> {
         signs = signs.signum();
 
         result.zip_mut_with(&signs, |v, sign| {
-            *v = sign * (*v).abs().powf(1.0 / self.1.len() as f64);
+            *v = sign * (*v).abs().powf(1.0 / self.0.len() as f64);
         });
 
         result
@@ -64,7 +60,7 @@ pub fn fit(
         tree_grids.push(tg);
     }
 
-    let tgf = TreeGridFamily(BaggedVariant, tree_grids);
+    let tgf = TreeGridFamily(tree_grids, PhantomData);
 
     let preds = tgf.predict(x);
     let residuals = &y - &preds;

@@ -2,7 +2,10 @@ use itertools::Itertools;
 use ndarray::{Array1, ArrayView1, ArrayView2};
 use rand::seq::SliceRandom;
 use rand::Rng;
-use std::collections::{BTreeSet, HashMap};
+use std::{
+    collections::{BTreeSet, HashMap},
+    marker::PhantomData,
+};
 
 use crate::{
     tree_grid::grid::fitter::{
@@ -11,20 +14,14 @@ use crate::{
     FitResult, FittedModel, ModelFitter,
 };
 
-use super::{FitAndPredictStrategy, TreeGridFamily};
+use super::TreeGridFamily;
 #[derive(Debug)]
 pub struct GrownVariant;
-
-impl Default for GrownVariant {
-    fn default() -> Self {
-        GrownVariant
-    }
-}
 
 impl FittedModel for TreeGridFamily<GrownVariant> {
     fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
         let mut result = Array1::zeros(x.shape()[0]);
-        for grid in self.1.iter() {
+        for grid in self.0.iter() {
             result += &grid.predict(x);
         }
         result
@@ -37,7 +34,6 @@ pub struct TreeGridFamilyGrownParams {
     pub m_try: f64,
     pub split_try: usize,
 }
-
 
 struct TreeGridFamilyGrownFitter<'a> {
     dims: usize,
@@ -228,20 +224,18 @@ pub fn fit(
         }
     }
 
-    (
-        FitResult {
-            err: fitter.loss(),
-            residuals: fitter.residuals,
-            y_hat: fitter.y_hat,
-        },
-        TreeGridFamily(
-            GrownVariant,
-            fitter
-                .tg_fitters
-                .into_values()
-                .flatten()
-                .map_into()
-                .collect(),
-        ),
-    )
+    let fit_result = FitResult {
+        err: fitter.loss(),
+        residuals: fitter.residuals,
+        y_hat: fitter.y_hat,
+    };
+
+    let fitted_tree_grids = fitter
+        .tg_fitters
+        .into_values()
+        .flatten()
+        .map_into()
+        .collect();
+
+    (fit_result, TreeGridFamily(fitted_tree_grids, PhantomData))
 }
