@@ -4,11 +4,49 @@ use ndarray::{Array1, ArrayView1, ArrayView2};
 use rand::Rng;
 
 use crate::{
-    tree_grid::grid::fitter::{TreeGridFitter, TreeGridParams},
-    FitResult, FittedModel, ModelFitter,
+    tree_grid::grid::{self, fitter::TreeGridParams},
+    FitResult, FittedModel,
 };
 
 use super::{FittedTreeGrid, TreeGridFamily};
+
+pub fn fit(
+    x: ArrayView2<f64>,
+    y: ArrayView1<f64>,
+    hyperparameters: &TreeGridFamilyBaggedParams,
+) -> (FitResult, TreeGridFamily<BaggedVariant>) {
+    let TreeGridFamilyBaggedParams { B, tg_params } = hyperparameters;
+    let mut rng = rand::thread_rng();
+    let mut tree_grids = vec![];
+
+    let n = x.nrows();
+
+    for b in 0..*B {
+        let sample_indices: Vec<usize> = (0..n).map(|_| rng.gen_range(0..n)).collect();
+        let x_sample = x.select(ndarray::Axis(0), &sample_indices);
+        let y_sample = y.select(ndarray::Axis(0), &sample_indices);
+        let (fit_res, tg): (FitResult, FittedTreeGrid) =
+            grid::fitter::fit(x.view(), y.view(), tg_params);
+        println!("b: {:?}, err: {:?}", b, fit_res.err);
+        tree_grids.push(tg);
+    }
+
+    let tgf = TreeGridFamily(tree_grids, PhantomData);
+
+    let preds = tgf.predict(x);
+    let residuals = &y - &preds;
+    let err = residuals.pow2().mean().unwrap();
+
+    (
+        FitResult {
+            err,
+            residuals: residuals.to_owned(),
+            y_hat: preds,
+        },
+        tgf,
+    )
+}
+
 #[derive(Debug)]
 pub struct BaggedVariant;
 
@@ -37,41 +75,4 @@ impl FittedModel for TreeGridFamily<BaggedVariant> {
 pub struct TreeGridFamilyBaggedParams {
     pub B: usize,
     pub tg_params: TreeGridParams,
-}
-
-pub fn fit(
-    x: ArrayView2<f64>,
-    y: ArrayView1<f64>,
-    hyperparameters: &TreeGridFamilyBaggedParams,
-) -> (FitResult, TreeGridFamily<BaggedVariant>) {
-    let TreeGridFamilyBaggedParams { B, tg_params } = hyperparameters;
-    let mut rng = rand::thread_rng();
-    let mut tree_grids = vec![];
-
-    let n = x.nrows();
-
-    for b in 0..*B {
-        let sample_indices: Vec<usize> = (0..n).map(|_| rng.gen_range(0..n)).collect();
-        let x_sample = x.select(ndarray::Axis(0), &sample_indices);
-        let y_sample = y.select(ndarray::Axis(0), &sample_indices);
-        let tg_fitter = TreeGridFitter::new(x_sample.view(), y_sample.view());
-        let (fit_res, tg): (FitResult, FittedTreeGrid) = tg_fitter.fit(tg_params);
-        println!("b: {:?}, err: {:?}", b, fit_res.err);
-        tree_grids.push(tg);
-    }
-
-    let tgf = TreeGridFamily(tree_grids, PhantomData);
-
-    let preds = tgf.predict(x);
-    let residuals = &y - &preds;
-    let err = residuals.pow2().mean().unwrap();
-
-    (
-        FitResult {
-            err,
-            residuals: residuals.to_owned(),
-            y_hat: preds,
-        },
-        tgf,
-    )
 }

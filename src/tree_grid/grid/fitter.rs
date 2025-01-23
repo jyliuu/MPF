@@ -8,6 +8,14 @@ use crate::{FitResult, ModelFitter};
 
 use super::FittedTreeGrid;
 
+pub fn fit(
+    x: ArrayView2<f64>,
+    y: ArrayView1<f64>,
+    hyperparameters: &TreeGridParams,
+) -> (FitResult, FittedTreeGrid) {
+    TreeGridFitter::new(x.view(), y.view()).fit(hyperparameters)
+}
+
 #[derive(Debug)]
 pub struct TreeGridFitter<'a> {
     pub splits: Vec<Vec<f64>>,
