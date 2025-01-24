@@ -53,13 +53,22 @@ impl DerefMut for TreeGridPy {
 
 #[derive(Debug)]
 #[pyclass(name = "FitResult")]
-pub struct FitResultPy(FitResult);
+pub struct FitResultPy {
+    #[pyo3(get)]
+    err: f64,
+    #[pyo3(get)]
+    residuals: Py<PyArray1<f64>>,
+    #[pyo3(get)]
+    y_hat: Py<PyArray1<f64>>,
+}
 
-impl Deref for FitResultPy {
-    type Target = FitResult;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl From<FitResult> for FitResultPy {
+    fn from(fit_result: FitResult) -> Self {
+        Python::with_gil(|py| FitResultPy {
+            err: fit_result.err,
+            residuals: fit_result.residuals.to_pyarray(py).unbind(),
+            y_hat: fit_result.y_hat.to_pyarray(py).unbind(),
+        })
     }
 }
 
@@ -94,7 +103,7 @@ impl MPFBaggedPy {
             .map(|tgf: &TreeGridFamily<BaggedVariant>| {
                 tgf.get_tree_grids()
                     .iter()
-                    .map(|tg| TreeGridPy(tg.clone()))
+                    .map(|tg| TreeGridPy::from(tg.clone()))
                     .collect()
             })
             .collect();
@@ -140,7 +149,7 @@ impl MPFBaggedPy {
             },
         };
         let (fit_result, mpf) = fit_bagged(x, y, params);
-        Ok((mpf.into(), FitResultPy(fit_result)))
+        Ok((mpf.into(), FitResultPy::from(fit_result)))
     }
 }
 
@@ -155,7 +164,7 @@ impl MPFGrownPy {
             .map(|tgf: &TreeGridFamily<GrownVariant>| {
                 tgf.get_tree_grids()
                     .iter()
-                    .map(|tg| TreeGridPy(tg.clone()))
+                    .map(|tg| TreeGridPy::from(tg.clone()))
                     .collect()
             })
             .collect();
@@ -195,7 +204,7 @@ impl MPFGrownPy {
             split_try,
         };
         let (fit_result, mpf) = fit_grown(x, y, params);
-        Ok((mpf.into(), FitResultPy(fit_result)))
+        Ok((mpf.into(), FitResultPy::from(fit_result)))
     }
 }
 
@@ -249,27 +258,12 @@ impl TreeGridPy {
         };
         let tg_fitter = TreeGridFitter::new(x.view(), y.view());
         let (fit_result, tg) = tg_fitter.fit(&params);
-        Ok((tg.into(), FitResultPy(fit_result)))
+        Ok((tg.into(), FitResultPy::from(fit_result)))
     }
 }
 
 #[pymethods]
 impl FitResultPy {
-    #[getter]
-    pub fn get_error(&self) -> f64 {
-        self.err
-    }
-
-    #[getter]
-    pub fn get_residuals<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f64>>> {
-        Ok(self.residuals.to_pyarray(py))
-    }
-
-    #[getter]
-    pub fn get_y_hat<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f64>>> {
-        Ok(self.y_hat.to_pyarray(py))
-    }
-
     fn __repr__(&self) -> String {
         format!(
             "FitResult(error={}, residuals={}, y_hat={})",
@@ -279,7 +273,7 @@ impl FitResultPy {
 }
 
 #[pymodule]
-fn mpf_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _mpf_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<TreeGridPy>()?;
     m.add_class::<FitResultPy>()?;
     m.add_class::<MPFBaggedPy>()?;

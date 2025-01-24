@@ -14,7 +14,7 @@ y = sin(x1) * cos(x2) + 2 * x1 - 2 * x2 + rnorm(n, sd=0.3)
 dat = data.frame(y, x1, x2)
 write.csv(dat, "dat.csv", row.names = FALSE)
 """
-df = pd.read_csv("../../dat.csv")
+df = pd.read_csv("../dat.csv")
 x = df.iloc[:, 1:].values
 y = df.iloc[:, 0].values
 
