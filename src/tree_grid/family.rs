@@ -1,59 +1,15 @@
-use ndarray::Array1;
-
-use crate::{FitResult, FittedModel, ModelFitter};
+use std::marker;
 
 use super::grid::FittedTreeGrid;
 pub mod bagged;
 pub mod grown;
 
-pub trait FitAndPredictStrategy {
-    type HyperParameters;
-    type Model: FittedModel;
-    type Features;
-    type Labels;
-
-    fn fit(
-        x: Self::Features,
-        y: Self::Labels,
-        hyperparameters: &Self::HyperParameters,
-    ) -> (FitResult, Self::Model);
-    fn predict(model: Self::Model, x: Self::Features) -> Array1<f64>;
-}
-pub struct TreeGridFamilyFitter<T: FitAndPredictStrategy> {
-    variant: T,
-    x: T::Features,
-    y: T::Labels,
-}
-
 #[derive(Debug)]
-pub struct TreeGridFamily<T>(T, Vec<FittedTreeGrid>);
+pub struct TreeGridFamily<T>(Vec<FittedTreeGrid>, marker::PhantomData<T>);
 
 impl<T> TreeGridFamily<T> {
     pub fn get_tree_grids(&self) -> &Vec<FittedTreeGrid> {
-        &self.1
-    }
-}
-
-impl<'a, T> ModelFitter for TreeGridFamilyFitter<T>
-where
-    TreeGridFamily<T>: FittedModel,
-    T: FitAndPredictStrategy + Default,
-{
-    type Features = T::Features;
-    type Labels = T::Labels;
-    type Model = T::Model;
-    type HyperParameters = T::HyperParameters;
-
-    fn new(x: Self::Features, y: Self::Labels) -> Self {
-        Self {
-            variant: T::default(),
-            x,
-            y,
-        }
-    }
-
-    fn fit(self, hyperparameters: &Self::HyperParameters) -> (FitResult, Self::Model) {
-        T::fit(self.x, self.y, hyperparameters)
+        &self.0
     }
 }
 
@@ -62,9 +18,9 @@ mod tests {
     use bagged::TreeGridFamilyBaggedParams;
     use csv::ReaderBuilder;
     use grown::TreeGridFamilyGrownParams;
-    use ndarray::Array2;
+    use ndarray::{Array1, Array2};
 
-    use crate::tree_grid::grid::fitter::TreeGridParams;
+    use crate::{tree_grid::grid::fitter::TreeGridParams, FittedModel};
 
     use super::*;
     fn setup_data() -> (Array2<f64>, Array1<f64>) {
