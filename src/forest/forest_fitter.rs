@@ -1,7 +1,8 @@
-use ndarray::{ArrayView1, ArrayView2};
+use ndarray::{Array1, ArrayView1, ArrayView2};
 
 use crate::{
     tree_grid::family::{
+        averaged::{self, AveragedVariant, TreeGridFamilyAveragedParams},
         bagged::{self, BaggedVariant, TreeGridFamilyBaggedParams},
         grown::{self, GrownVariant, TreeGridFamilyGrownParams},
         TreeGridFamily,
@@ -21,6 +22,11 @@ pub struct MPFParams {
 pub struct MPFBaggedParams {
     pub epochs: usize,
     pub tgf_params: TreeGridFamilyBaggedParams,
+}
+
+pub struct MPFAveragedParams {
+    pub epochs: usize,
+    pub tgf_params: TreeGridFamilyAveragedParams,
 }
 
 pub fn fit_grown(
@@ -88,6 +94,35 @@ pub fn fit_bagged(
         err: y_new.pow2().mean().unwrap(),
         residuals: y_new.clone(),
         y_hat: -y_new + y,
+    };
+
+    (fit_result, MPF::new(tree_grid_families))
+}
+
+pub fn fit_averaged(
+    x: ArrayView2<f64>,
+    y: ArrayView1<f64>,
+    hyperparameters: MPFAveragedParams,
+) -> (FitResult, MPF<TreeGridFamily<AveragedVariant>>) {
+    let MPFAveragedParams { epochs, tgf_params } = hyperparameters;
+
+    let mut tree_grid_families = Vec::new();
+    let mut residuals = Array1::zeros(y.len());
+
+    for _ in 0..epochs {
+        let (fit_result, tree_grid_family) = averaged::fit(x.view(), y.view(), &tgf_params);
+        tree_grid_families.push(tree_grid_family);
+        residuals += &fit_result.residuals;
+    }
+
+    let residuals = residuals / epochs as f64;
+    let y_hat = y.to_owned() - residuals.view();
+    let err = residuals.pow2().mean().unwrap();
+
+    let fit_result = FitResult {
+        err,
+        residuals,
+        y_hat,
     };
 
     (fit_result, MPF::new(tree_grid_families))

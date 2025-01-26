@@ -14,7 +14,7 @@ use crate::{
     FitResult, FittedModel, ModelFitter,
 };
 
-use super::TreeGridFamily;
+use super::{Aggregation, AggregationMethod, TreeGridFamily};
 
 pub fn fit(
     x: ArrayView2<f64>,
@@ -127,6 +127,10 @@ pub fn fit(
 
 #[derive(Debug)]
 pub struct GrownVariant;
+
+impl AggregationMethod for GrownVariant {
+    const AGGREGATION_METHOD: Aggregation = Aggregation::Average;
+}
 
 impl FittedModel for TreeGridFamily<GrownVariant> {
     fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
