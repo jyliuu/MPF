@@ -1,7 +1,7 @@
 use ndarray::{Array1, ArrayView2};
 
 use crate::{
-    tree_grid::family::{bagged::BaggedVariant, grown::GrownVariant, TreeGridFamily},
+    tree_grid::family::{Aggregation, AggregationMethod, TreeGridFamily},
     FittedModel,
 };
 
@@ -22,22 +22,20 @@ impl<T: FittedModel> MPF<T> {
     }
 }
 
-impl FittedModel for MPF<TreeGridFamily<BaggedVariant>> {
+impl<T> FittedModel for MPF<TreeGridFamily<T>>
+where
+    T: AggregationMethod,
+    TreeGridFamily<T>: FittedModel,
+{
     fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
         let mut result = Array1::zeros(x.shape()[0]);
         for tree_grid_family in &self.tree_grid_families {
             result += &tree_grid_family.predict(x);
         }
-        result
-    }
-}
 
-impl FittedModel for MPF<TreeGridFamily<GrownVariant>> {
-    fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
-        let mut result = Array1::zeros(x.shape()[0]);
-        for tree_grid_family in &self.tree_grid_families {
-            result += &tree_grid_family.predict(x);
+        match T::AGGREGATION_METHOD {
+            Aggregation::Average => result / self.tree_grid_families.len() as f64,
+            Aggregation::Sum => result,
         }
-        result / self.tree_grid_families.len() as f64
     }
 }

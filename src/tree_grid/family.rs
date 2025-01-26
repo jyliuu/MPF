@@ -1,11 +1,21 @@
 use std::marker;
 
 use super::grid::FittedTreeGrid;
+pub mod averaged;
 pub mod bagged;
 pub mod grown;
 
 #[derive(Debug)]
 pub struct TreeGridFamily<T>(Vec<FittedTreeGrid>, marker::PhantomData<T>);
+
+#[derive(PartialEq)]
+pub enum Aggregation {
+    Average,
+    Sum,
+}
+pub trait AggregationMethod {
+    const AGGREGATION_METHOD: Aggregation;
+}
 
 impl<T> TreeGridFamily<T> {
     pub fn get_tree_grids(&self) -> &Vec<FittedTreeGrid> {
@@ -15,6 +25,7 @@ impl<T> TreeGridFamily<T> {
 
 #[cfg(test)]
 mod tests {
+    use averaged::TreeGridFamilyAveragedParams;
     use bagged::TreeGridFamilyBaggedParams;
     use csv::ReaderBuilder;
     use grown::TreeGridFamilyGrownParams;
@@ -61,6 +72,27 @@ mod tests {
             },
         };
         let (fit_result, _) = bagged::fit(x.view(), y.view(), &hyperparameters);
+        let mean = y.mean().unwrap();
+        let base_err = (y - mean).powi(2).mean().unwrap();
+        println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
+        assert!(
+            fit_result.err < base_err,
+            "Error is not less than mean error"
+        );
+    }
+
+    #[test]
+    fn test_tgf_averaged_fit() {
+        let (x, y) = setup_data();
+        let hyperparameters = TreeGridFamilyAveragedParams {
+            B: 100,
+            tg_params: TreeGridParams {
+                n_iter: 100,
+                split_try: 10,
+                colsample_bytree: 1.0,
+            },
+        };
+        let (fit_result, _) = averaged::fit(x.view(), y.view(), &hyperparameters);
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();
         println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
