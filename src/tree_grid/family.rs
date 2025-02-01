@@ -25,44 +25,20 @@ impl<T> TreeGridFamily<T> {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_data::setup_data_csv;
     use averaged::TreeGridFamilyAveragedParams;
     use bagged::TreeGridFamilyBaggedParams;
-    use csv::ReaderBuilder;
+    
     use grown::TreeGridFamilyGrownParams;
-    use ndarray::{Array1, Array2};
+    
 
     use crate::{tree_grid::grid::fitter::TreeGridParams, FittedModel};
 
     use super::*;
-    fn setup_data() -> (Array2<f64>, Array1<f64>) {
-        let mut rdr = ReaderBuilder::new()
-            .has_headers(true)
-            .from_path("./dat.csv")
-            .expect("Failed to open file");
-
-        let mut x_data = Vec::new();
-        let mut y_data = Vec::new();
-
-        for result in rdr.records() {
-            let record = result.expect("Failed to read record");
-            let y: f64 = record[0].parse().expect("Failed to parse y");
-            let x1: f64 = record[1].parse().expect("Failed to parse x1");
-            let x2: f64 = record[2].parse().expect("Failed to parse x2");
-
-            y_data.push(y);
-            x_data.push(vec![x1, x2]);
-        }
-
-        let x = Array2::from_shape_vec((x_data.len(), 2), x_data.into_iter().flatten().collect())
-            .expect("Failed to create Array2");
-        let y = Array1::from(y_data);
-
-        (x, y)
-    }
 
     #[test]
     fn test_tgf_bagged_fit() {
-        let (x, y) = setup_data();
+        let (x, y) = setup_data_csv();
         let hyperparameters = TreeGridFamilyBaggedParams {
             B: 100,
             tg_params: TreeGridParams {
@@ -83,7 +59,7 @@ mod tests {
 
     #[test]
     fn test_tgf_averaged_fit() {
-        let (x, y) = setup_data();
+        let (x, y) = setup_data_csv();
         let hyperparameters = TreeGridFamilyAveragedParams {
             B: 100,
             tg_params: TreeGridParams {
@@ -104,7 +80,7 @@ mod tests {
 
     #[test]
     fn test_tgf_grown_fit() {
-        let (x, y) = setup_data();
+        let (x, y) = setup_data_csv();
         let hyperparameters = TreeGridFamilyGrownParams {
             n_iter: 100,
             m_try: 1.0,
@@ -122,7 +98,7 @@ mod tests {
 
     #[test]
     fn test_tgf_grown_predict() {
-        let (x, y) = setup_data();
+        let (x, y) = setup_data_csv();
         let hyperparameters = TreeGridFamilyGrownParams {
             n_iter: 100,
             m_try: 1.0,

@@ -131,41 +131,23 @@ pub fn fit_averaged(
 mod tests {
     use std::ops::Div;
 
-    use csv::ReaderBuilder;
-    use ndarray::{s, Array1, Array2};
+    use ndarray::s;
 
-    use crate::{tree_grid::grid::fitter::TreeGridParams, FittedModel};
-
-    use super::*;
-    fn setup_data() -> (Array2<f64>, Array1<f64>) {
-        let mut rdr = ReaderBuilder::new()
-            .has_headers(true)
-            .from_path("./dat.csv")
-            .expect("Failed to open file");
-
-        let mut x_data = Vec::new();
-        let mut y_data = Vec::new();
-
-        for result in rdr.records() {
-            let record = result.expect("Failed to read record");
-            let y: f64 = record[0].parse().expect("Failed to parse y");
-            let x1: f64 = record[1].parse().expect("Failed to parse x1");
-            let x2: f64 = record[2].parse().expect("Failed to parse x2");
-
-            y_data.push(y);
-            x_data.push(vec![x1, x2]);
-        }
-
-        let x = Array2::from_shape_vec((x_data.len(), 2), x_data.into_iter().flatten().collect())
-            .expect("Failed to create Array2");
-        let y = Array1::from(y_data);
-
-        (x, y)
-    }
+    use crate::{
+        forest::forest_fitter::{
+            fit_averaged, fit_bagged, fit_grown, MPFAveragedParams, MPFBaggedParams, MPFParams,
+        },
+        test_data::setup_data_csv,
+        tree_grid::{
+            family::{averaged::TreeGridFamilyAveragedParams, bagged::TreeGridFamilyBaggedParams},
+            grid::fitter::TreeGridParams,
+        },
+        FittedModel,
+    };
 
     #[test]
     fn test_mpf_fit() {
-        let (x, y) = setup_data();
+        let (x, y) = setup_data_csv();
         let n = y.len();
         println!("Fitting and testing on {} samples", n / 2);
         let x_train = x.slice(s![..n / 2, ..]);
@@ -202,7 +184,7 @@ mod tests {
 
     #[test]
     fn test_mpf_bagged_fit() {
-        let (x, y) = setup_data();
+        let (x, y) = setup_data_csv();
         let n = y.len();
         println!("Fitting and testing on {} samples", n / 2);
         let x_train = x.slice(s![..n / 2, ..]);
@@ -243,7 +225,7 @@ mod tests {
 
     #[test]
     fn test_mpf_averaged_fit() {
-        let (x, y) = setup_data();
+        let (x, y) = setup_data_csv();
         let n = y.len();
         println!("Fitting and testing on {} samples", n / 2);
         let x_train = x.slice(s![..n / 2, ..]);
@@ -284,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_mpf_predict() {
-        let (x, y) = setup_data();
+        let (x, y) = setup_data_csv();
         let (fit_result, mpf) = fit_grown(
             x.view(),
             y.view(),

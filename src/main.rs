@@ -1,12 +1,10 @@
 use std::{ops::Div, time::SystemTime};
 
-use csv::ReaderBuilder;
 use mpf::{
     forest::{
         forest_fitter::{fit_bagged, MPFBaggedParams},
         mpf::MPF,
-    },
-    tree_grid::{
+    }, test_data::setup_data_csv, tree_grid::{
         family::{
             bagged::{BaggedVariant, TreeGridFamilyBaggedParams},
             TreeGridFamily,
@@ -15,36 +13,9 @@ use mpf::{
             fitter::{TreeGridFitter, TreeGridParams},
             FittedTreeGrid,
         },
-    },
-    FitResult, FittedModel, ModelFitter,
+    }, FitResult, FittedModel, ModelFitter
 };
-use ndarray::{s, Array1, Array2, ArrayView1, ArrayView2};
-
-fn setup_data() -> (Array2<f64>, Array1<f64>) {
-    let mut rdr = ReaderBuilder::new()
-        .has_headers(true)
-        .from_path("./dat.csv")
-        .expect("Failed to open file");
-
-    let mut x_data = Vec::new();
-    let mut y_data = Vec::new();
-
-    for result in rdr.records() {
-        let record = result.expect("Failed to read record");
-        let y: f64 = record[0].parse().expect("Failed to parse y");
-        let x1: f64 = record[1].parse().expect("Failed to parse x1");
-        let x2: f64 = record[2].parse().expect("Failed to parse x2");
-
-        y_data.push(y);
-        x_data.push(vec![x1, x2]);
-    }
-
-    let x = Array2::from_shape_vec((x_data.len(), 2), x_data.into_iter().flatten().collect())
-        .expect("Failed to create Array2");
-    let y = Array1::from(y_data);
-
-    (x, y)
-}
+use ndarray::{s, ArrayView1, ArrayView2};
 
 fn fit_bagged_mpf(
     x: ArrayView2<f64>,
@@ -82,7 +53,7 @@ fn fit_tree_grid(x: ArrayView2<f64>, y: ArrayView1<f64>) -> (FitResult, FittedTr
 
 fn main() {
     println!("Running main");
-    let (x, y) = setup_data();
+    let (x, y) = setup_data_csv();
     let n = y.len();
     println!("Fitting and testing on {} samples", n / 2);
     let x_train = x.slice(s![..n / 2, ..]);

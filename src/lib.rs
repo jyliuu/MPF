@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 pub mod forest;
+pub mod test_data;
 pub mod tree_grid;
 use ndarray::{Array1, ArrayView2};
 
