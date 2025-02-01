@@ -19,14 +19,43 @@ pub struct MPFParams {
     pub split_try: usize,
 }
 
+impl Default for MPFParams {
+    fn default() -> Self {
+        MPFParams {
+            n_families: 100,
+            n_iter: 100,
+            m_try: 1.0,
+            split_try: 10,
+        }
+    }
+}
+
 pub struct MPFBaggedParams {
     pub epochs: usize,
     pub tgf_params: TreeGridFamilyBaggedParams,
 }
 
+impl Default for MPFBaggedParams {
+    fn default() -> Self {
+        MPFBaggedParams {
+            epochs: 5,
+            tgf_params: TreeGridFamilyBaggedParams::default(),
+        }
+    }
+}
+
 pub struct MPFAveragedParams {
     pub epochs: usize,
     pub tgf_params: TreeGridFamilyAveragedParams,
+}
+
+impl Default for MPFAveragedParams {
+    fn default() -> Self {
+        MPFAveragedParams {
+            epochs: 5,
+            tgf_params: TreeGridFamilyAveragedParams::default(),
+        }
+    }
 }
 
 pub fn fit_grown(

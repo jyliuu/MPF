@@ -80,3 +80,12 @@ pub struct TreeGridFamilyBaggedParams {
     pub B: usize,
     pub tg_params: TreeGridParams,
 }
+
+impl Default for TreeGridFamilyBaggedParams {
+    fn default() -> Self {
+        TreeGridFamilyBaggedParams {
+            B: 100,
+            tg_params: TreeGridParams::default(),
+        }
+    }
+}

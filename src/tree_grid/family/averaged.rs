@@ -49,3 +49,12 @@ pub struct TreeGridFamilyAveragedParams {
     pub B: usize,
     pub tg_params: TreeGridParams,
 }
+
+impl Default for TreeGridFamilyAveragedParams {
+    fn default() -> Self {
+        TreeGridFamilyAveragedParams {
+            B: 100,
+            tg_params: TreeGridParams::default(),
+        }
+    }
+}

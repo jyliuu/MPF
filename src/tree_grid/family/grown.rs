@@ -149,6 +149,16 @@ pub struct TreeGridFamilyGrownParams {
     pub split_try: usize,
 }
 
+impl Default for TreeGridFamilyGrownParams {
+    fn default() -> Self {
+        Self {
+            n_iter: 100,
+            m_try: 1.0,
+            split_try: 10,
+        }
+    }
+}
+
 struct TreeGridFamilyGrownFitter<'a> {
     dims: usize,
     x: ArrayView2<'a, f64>,
