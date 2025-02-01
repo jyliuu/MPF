@@ -242,6 +242,47 @@ mod tests {
     }
 
     #[test]
+    fn test_mpf_averaged_fit() {
+        let (x, y) = setup_data();
+        let n = y.len();
+        println!("Fitting and testing on {} samples", n / 2);
+        let x_train = x.slice(s![..n / 2, ..]);
+        let y_train = y.slice(s![..n / 2]);
+
+        let x_test = x.slice(s![n / 2.., ..]);
+        let y_test = y.slice(s![n / 2..]);
+
+        let (fit_result, mpf) = fit_averaged(
+            x_train,
+            y_train,
+            MPFAveragedParams {
+                epochs: 5,
+                tgf_params: TreeGridFamilyAveragedParams {
+                    B: 100,
+                    tg_params: TreeGridParams {
+                        n_iter: 100,
+                        split_try: 10,
+                        colsample_bytree: 1.0,
+                    },
+                },
+            },
+        );
+        let mean = y_test.mean().unwrap();
+        let base_err = y_test.view().map(|v| v - mean).powi(2).mean().unwrap();
+        let preds = mpf.predict(x_test.view());
+        let test_err: f64 = y_test
+            .indexed_iter()
+            .map(|(i, v)| (v - preds[i]).powi(2).div(y_test.len() as f64))
+            .sum();
+        println! {"Base error: {:?}, Training Error: {:?}, Test Error: {:?}", base_err, fit_result.err, test_err};
+
+        assert!(
+            fit_result.err < base_err,
+            "Error is not less than mean error"
+        );
+    }
+
+    #[test]
     fn test_mpf_predict() {
         let (x, y) = setup_data();
         let (fit_result, mpf) = fit_grown(
