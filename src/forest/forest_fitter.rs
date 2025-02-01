@@ -80,12 +80,11 @@ pub fn fit_bagged(
     let MPFBaggedParams { epochs, tgf_params } = hyperparameters;
 
     // Ensure that x_input and y_input have the same lifetime ('c) during this loop.
-    let i = 0;
     let mut y_new = y.to_owned();
     let mut tree_grid_families = Vec::new();
 
     for _ in 0..epochs {
-        let (fit_result, tree_grid_family) = bagged::fit(x.view(), y.view(), &tgf_params);
+        let (fit_result, tree_grid_family) = bagged::fit(x.view(), y_new.view(), &tgf_params);
         tree_grid_families.push(tree_grid_family);
         y_new = fit_result.residuals;
     }
