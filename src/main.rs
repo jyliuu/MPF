@@ -2,13 +2,25 @@ use std::{ops::Div, time::SystemTime};
 
 use mpf::{
     forest::forest_fitter::{fit_bagged, MPFBaggedParams},
+    tree_grid::{family::bagged::TreeGridFamilyBaggedParams, grid::fitter::TreeGridParams},
     FittedModel,
 };
 use ndarray::s;
+
 mod test_data;
 
 fn main() {
-    println!("Running main");
+    #[cfg(feature = "use-rayon")]
+    {
+        use rayon::ThreadPoolBuilder;
+        println!("Using 4 threads for rayon");
+        ThreadPoolBuilder::new()
+            .num_threads(4)
+            .build_global()
+            .expect("Failed to build global thread pool");
+    }
+
+    println!("Running main bagged test");
     let (x, y) = test_data::setup_data_csv();
     let n = y.len();
     println!("Fitting and testing on {} samples", n / 2);
@@ -19,7 +31,15 @@ fn main() {
     let y_test = y.slice(s![n / 2..]);
 
     let start = SystemTime::now();
-    let (fr, model) = fit_bagged(x_train.view(), y_train.view(), MPFBaggedParams::default());
+    let params = MPFBaggedParams {
+        epochs: 50,
+        tgf_params: TreeGridFamilyBaggedParams {
+            B: 10,
+            tg_params: TreeGridParams::default(),
+        },
+    };
+
+    let (fr, model) = fit_bagged(x_train.view(), y_train.view(), params);
     let elapsed = start.elapsed().unwrap();
     println!("Time elapsed: {:?}", elapsed);
 

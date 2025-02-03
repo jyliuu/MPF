@@ -10,25 +10,48 @@ use crate::{
 
 use super::{Aggregation, AggregationMethod, FittedTreeGrid, TreeGridFamily};
 
+#[cfg(feature = "use-rayon")]
+use rayon::prelude::*;
+
 pub fn fit(
     x: ArrayView2<f64>,
     y: ArrayView1<f64>,
     hyperparameters: &TreeGridFamilyBaggedParams,
 ) -> (FitResult, TreeGridFamily<BaggedVariant>) {
     let TreeGridFamilyBaggedParams { B, tg_params } = hyperparameters;
-    let mut rng = rand::thread_rng();
     let mut tree_grids = vec![];
 
     let n = x.nrows();
 
-    for b in 0..*B {
-        let sample_indices: Vec<usize> = (0..n).map(|_| rng.gen_range(0..n)).collect();
-        let x_sample = x.select(ndarray::Axis(0), &sample_indices);
-        let y_sample = y.select(ndarray::Axis(0), &sample_indices);
-        let (fit_res, tg): (FitResult, FittedTreeGrid) =
-            grid::fitter::fit(x.view(), y.view(), tg_params);
-        println!("b: {:?}, err: {:?}", b, fit_res.err);
-        tree_grids.push(tg);
+    #[cfg(not(feature = "use-rayon"))]
+    {
+        let mut rng = rand::thread_rng();
+        for b in 0..*B {
+            let sample_indices: Vec<usize> = (0..n).map(|_| rng.gen_range(0..n)).collect();
+            let x_sample = x.select(ndarray::Axis(0), &sample_indices);
+            let y_sample = y.select(ndarray::Axis(0), &sample_indices);
+            let (fit_res, tg): (FitResult, FittedTreeGrid) =
+                grid::fitter::fit(x.view(), y.view(), tg_params);
+            println!("b: {:?}, err: {:?}", b, fit_res.err);
+            tree_grids.push(tg);
+        }
+    }
+    #[cfg(feature = "use-rayon")]
+    {
+        println!("Using rayon");
+        tree_grids = (0..*B)
+            .into_par_iter()
+            .map(|b| {
+                let mut rng = rand::thread_rng();
+                let sample_indices: Vec<usize> = (0..n).map(|_| rng.gen_range(0..n)).collect();
+                let x_sample = x.select(ndarray::Axis(0), &sample_indices);
+                let y_sample = y.select(ndarray::Axis(0), &sample_indices);
+                let (fit_res, tg): (FitResult, FittedTreeGrid) =
+                    grid::fitter::fit(x_sample.view(), y_sample.view(), tg_params);
+                println!("b: {:?}, err: {:?}", b, fit_res.err);
+                tg
+            })
+            .collect();
     }
 
     let tgf = TreeGridFamily(tree_grids, PhantomData);
