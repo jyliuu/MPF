@@ -1,12 +1,10 @@
-use std::marker;
-
 use super::grid::FittedTreeGrid;
 pub mod averaged;
 pub mod bagged;
 pub mod grown;
 
 #[derive(Debug)]
-pub struct TreeGridFamily<T>(Vec<FittedTreeGrid>, marker::PhantomData<T>);
+pub struct TreeGridFamily<T>(Vec<FittedTreeGrid>, T);
 
 #[derive(PartialEq)]
 pub enum Aggregation {
@@ -28,9 +26,7 @@ mod tests {
     use crate::test_data::setup_data_csv;
     use averaged::TreeGridFamilyAveragedParams;
     use bagged::TreeGridFamilyBaggedParams;
-    
     use grown::TreeGridFamilyGrownParams;
-    
 
     use crate::{tree_grid::grid::fitter::TreeGridParams, FittedModel};
 

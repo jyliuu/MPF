@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 
 use ndarray::{Array1, ArrayView1, ArrayView2};
 
@@ -20,7 +19,7 @@ pub fn fit(
         },
     );
 
-    let tgf = TreeGridFamily(tgf.0, PhantomData);
+    let tgf = TreeGridFamily(tgf.0, AveragedVariant);
     (fr, tgf)
 }
 

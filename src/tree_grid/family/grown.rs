@@ -2,10 +2,7 @@ use itertools::Itertools;
 use ndarray::{Array1, ArrayView1, ArrayView2};
 use rand::seq::SliceRandom;
 use rand::Rng;
-use std::{
-    collections::{BTreeSet, HashMap},
-    marker::PhantomData,
-};
+use std::collections::{BTreeSet, HashMap};
 
 use crate::{
     tree_grid::grid::fitter::{
@@ -122,7 +119,7 @@ pub fn fit(
         .map_into()
         .collect();
 
-    (fit_result, TreeGridFamily(fitted_tree_grids, PhantomData))
+    (fit_result, TreeGridFamily(fitted_tree_grids, GrownVariant))
 }
 
 #[derive(Debug)]

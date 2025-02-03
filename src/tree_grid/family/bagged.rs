@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 
 use ndarray::{Array1, ArrayView1, ArrayView2};
 use rand::Rng;
@@ -54,7 +53,7 @@ pub fn fit(
             .collect();
     }
 
-    let tgf = TreeGridFamily(tree_grids, PhantomData);
+    let tgf = TreeGridFamily(tree_grids, BaggedVariant);
 
     let preds = tgf.predict(x);
     let residuals = &y - &preds;
