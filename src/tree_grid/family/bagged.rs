@@ -1,4 +1,3 @@
-
 use ndarray::{Array1, ArrayView1, ArrayView2};
 use rand::Rng;
 
@@ -18,40 +17,32 @@ pub fn fit(
     hyperparameters: &TreeGridFamilyBaggedParams,
 ) -> (FitResult, TreeGridFamily<BaggedVariant>) {
     let TreeGridFamilyBaggedParams { B, tg_params } = hyperparameters;
-    let mut tree_grids = vec![];
-
+    let tree_grids_iter;
     let n = x.nrows();
 
     #[cfg(not(feature = "use-rayon"))]
     {
-        let mut rng = rand::thread_rng();
-        for b in 0..*B {
-            let sample_indices: Vec<usize> = (0..n).map(|_| rng.gen_range(0..n)).collect();
-            let x_sample = x.select(ndarray::Axis(0), &sample_indices);
-            let y_sample = y.select(ndarray::Axis(0), &sample_indices);
-            let (fit_res, tg): (FitResult, FittedTreeGrid) =
-                grid::fitter::fit(x.view(), y.view(), tg_params);
-            println!("b: {:?}, err: {:?}", b, fit_res.err);
-            tree_grids.push(tg);
-        }
+        tree_grids_iter = 0..*B
     }
     #[cfg(feature = "use-rayon")]
     {
-        println!("Using rayon");
-        tree_grids = (0..*B)
-            .into_par_iter()
-            .map(|b| {
-                let mut rng = rand::thread_rng();
-                let sample_indices: Vec<usize> = (0..n).map(|_| rng.gen_range(0..n)).collect();
-                let x_sample = x.select(ndarray::Axis(0), &sample_indices);
-                let y_sample = y.select(ndarray::Axis(0), &sample_indices);
-                let (fit_res, tg): (FitResult, FittedTreeGrid) =
-                    grid::fitter::fit(x_sample.view(), y_sample.view(), tg_params);
-                println!("b: {:?}, err: {:?}", b, fit_res.err);
-                tg
-            })
-            .collect();
+        tree_grids_iter = (0..*B).into_par_iter()
     }
+
+    let tree_grids: Vec<FittedTreeGrid> = tree_grids_iter
+        .map(|b| {
+            // Common sampling code without shifting.
+            let mut rng = rand::thread_rng();
+            let sample_indices: Vec<usize> = (0..n).map(|_| rng.gen_range(0..n)).collect();
+            let x_sample = x.select(ndarray::Axis(0), &sample_indices);
+            let y_sample = y.select(ndarray::Axis(0), &sample_indices);
+
+            let (fit_res, tg): (FitResult, FittedTreeGrid) =
+                grid::fitter::fit(x_sample.view(), y_sample.view(), tg_params);
+            println!("b: {:?}, err: {:?}", b, fit_res.err);
+            tg
+        })
+        .collect();
 
     let tgf = TreeGridFamily(tree_grids, BaggedVariant);
 
@@ -69,20 +60,40 @@ pub fn fit(
     )
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BaggedVariant;
 
 impl AggregationMethod for BaggedVariant {
-    const AGGREGATION_METHOD: Aggregation = Aggregation::Average;
+    const AGGREGATION_METHOD: Aggregation = Aggregation::Sum;
 }
 
-impl FittedModel for TreeGridFamily<BaggedVariant> {
-    fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
+fn geometric_mean(values: &[f64]) -> f64 {
+    let n = values.len() as f64;
+    let eps = 1e-12;
+    let mut sum_log = 0.0;
+    let mut neg_count = 0;
+    for &v in values {
+        if v < 0.0 {
+            neg_count += 1;
+        }
+        // Add a small epsilon to avoid log(0).
+        sum_log += (v.abs() + eps).ln();
+    }
+    let mean_log = sum_log / n;
+    let gmean = mean_log.exp();
+    if (neg_count as f64) > n / 2.0 {
+        -gmean
+    } else {
+        gmean
+    }
+}
+
+impl TreeGridFamily<BaggedVariant> {
+    fn predict_majority_voted_sign(&self, x: ArrayView2<f64>) -> Array1<f64> {
         let mut result = Array1::ones(x.shape()[0]);
         let mut signs = Array1::from_elem(x.shape()[0], 0.0);
-        for grids in &self.0 {
-            let pred = grids.predict(x.view());
-
+        for grid in &self.0 {
+            let pred = grid.predict(x.view());
             result *= &pred;
             signs += &pred.signum();
         }
@@ -153,6 +164,12 @@ impl FittedModel for TreeGridFamily<BaggedVariant> {
             intervals: combined_intervals,
             grid_values: combined_grid_values,
         }
+    }
+}
+
+impl FittedModel for TreeGridFamily<BaggedVariant> {
+    fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
+        self.predict_majority_voted_sign(x)
     }
 }
 
