@@ -122,7 +122,7 @@ pub fn fit(
     (fit_result, TreeGridFamily(fitted_tree_grids, GrownVariant))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GrownVariant;
 
 impl AggregationMethod for GrownVariant {

@@ -3,7 +3,7 @@ pub mod averaged;
 pub mod bagged;
 pub mod grown;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TreeGridFamily<T>(Vec<FittedTreeGrid>, T);
 
 #[derive(PartialEq)]
