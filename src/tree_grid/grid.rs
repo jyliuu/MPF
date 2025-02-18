@@ -1,3 +1,5 @@
+use std::ops::Div;
+
 use fitter::TreeGridFitter;
 use ndarray::{Array1, ArrayView2, Axis};
 
@@ -23,6 +25,22 @@ impl FittedTreeGrid {
             intervals,
             grid_values,
         }
+    }
+
+    pub fn identify(&self) -> (f64, FittedTreeGrid) {
+        let mut identified = self.clone();
+        let gv = &mut identified.grid_values;
+        let mut scaling = 1.0;
+        for (i, grid) in gv.iter_mut().enumerate() {
+            let n = grid.len();
+            let norm = grid.iter().map(|x| x.powi(2).div(n as f64)).sum::<f64>();
+            let sum = grid.iter().sum::<f64>();
+            let factor = norm * sum.signum();
+            scaling *= factor;
+
+            grid.iter_mut().for_each(|x| *x /= factor);
+        }
+        (scaling, identified)
     }
 }
 
