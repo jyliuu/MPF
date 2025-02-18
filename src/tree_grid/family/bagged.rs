@@ -95,6 +95,65 @@ impl FittedModel for TreeGridFamily<BaggedVariant> {
 
         result
     }
+
+    pub fn combine_into_single_tree_grid(&self) -> FittedTreeGrid {
+        let grids = &self.0;
+        let num_axes = grids[0].splits.len();
+        let mut combined_splits: Vec<Vec<f64>> = Vec::with_capacity(num_axes);
+        let mut combined_intervals: Vec<Vec<(f64, f64)>> = Vec::with_capacity(num_axes);
+        let mut combined_grid_values: Vec<Vec<f64>> = Vec::with_capacity(num_axes);
+
+        // Process each axis separately.
+        for axis in 0..num_axes {
+            let mut splits: Vec<f64> = grids
+                .iter()
+                .flat_map(|grid| grid.splits[axis].clone())
+                .collect();
+
+            // Sort the endpoints and remove duplicates (allowing for floating-point tolerance).
+            splits.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            splits.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
+
+            // Create new (refined) intervals from consecutive endpoints.
+            let mut new_intervals: Vec<(f64, f64)> = Vec::new();
+            new_intervals.push((f64::NEG_INFINITY, splits[0]));
+            for i in 0..splits.len() - 1 {
+                new_intervals.push((splits[i], splits[i + 1]));
+            }
+            new_intervals.push((splits[splits.len() - 1], f64::INFINITY));
+
+            // For each new interval, combine the grid values from all treegrids.
+            let mut new_grid_values: Vec<f64> = Vec::new();
+            for &(a, b) in &new_intervals {
+                let mut values: Vec<f64> = Vec::new();
+                // For each treegrid, find the grid value for which [a,b) is contained in its interval.
+                for grid in grids {
+                    let mut found_value = None;
+                    for (i, &(ia, ib)) in grid.intervals[axis].iter().enumerate() {
+                        if a >= ia && b <= ib {
+                            found_value = Some(grid.grid_values[axis][i]);
+                            break;
+                        }
+                    }
+                    if let Some(val) = found_value {
+                        values.push(val);
+                    }
+                }
+                // Combine these values using a geometric mean that handles negatives.
+                let combined_val = geometric_mean(&values);
+                new_grid_values.push(combined_val);
+            }
+            combined_intervals.push(new_intervals);
+            combined_splits.push(splits);
+            combined_grid_values.push(new_grid_values);
+        }
+
+        FittedTreeGrid {
+            splits: combined_splits,
+            intervals: combined_intervals,
+            grid_values: combined_grid_values,
+        }
+    }
 }
 
 #[derive(Debug)]
