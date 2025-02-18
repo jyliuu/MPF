@@ -222,21 +222,7 @@ mod tests {
         let x_test = x.slice(s![n / 2.., ..]);
         let y_test = y.slice(s![n / 2..]);
 
-        let (fit_result, mpf) = fit_bagged(
-            x_train,
-            y_train,
-            MPFBaggedParams {
-                epochs: 5,
-                tgf_params: TreeGridFamilyBaggedParams {
-                    B: 100,
-                    tg_params: TreeGridParams {
-                        n_iter: 100,
-                        split_try: 10,
-                        colsample_bytree: 1.0,
-                    },
-                },
-            },
-        );
+        let (fit_result, mpf) = fit_bagged(x_train, y_train, MPFBaggedParams::default());
         let mean = y_test.mean().unwrap();
         let base_err = y_test.view().map(|v| v - mean).powi(2).mean().unwrap();
         let preds = mpf.predict(x_test.view());
@@ -263,21 +249,7 @@ mod tests {
         let x_test = x.slice(s![n / 2.., ..]);
         let y_test = y.slice(s![n / 2..]);
 
-        let (fit_result, mpf) = fit_averaged(
-            x_train,
-            y_train,
-            MPFAveragedParams {
-                epochs: 5,
-                tgf_params: TreeGridFamilyAveragedParams {
-                    B: 100,
-                    tg_params: TreeGridParams {
-                        n_iter: 100,
-                        split_try: 10,
-                        colsample_bytree: 1.0,
-                    },
-                },
-            },
-        );
+        let (fit_result, mpf) = fit_averaged(x_train, y_train, MPFAveragedParams::default());
         let mean = y_test.mean().unwrap();
         let base_err = y_test.view().map(|v| v - mean).powi(2).mean().unwrap();
         let preds = mpf.predict(x_test.view());

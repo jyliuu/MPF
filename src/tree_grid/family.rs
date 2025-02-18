@@ -35,14 +35,7 @@ mod tests {
     #[test]
     fn test_tgf_bagged_fit() {
         let (x, y) = setup_data_csv();
-        let hyperparameters = TreeGridFamilyBaggedParams {
-            B: 100,
-            tg_params: TreeGridParams {
-                n_iter: 100,
-                split_try: 10,
-                colsample_bytree: 1.0,
-            },
-        };
+        let hyperparameters = TreeGridFamilyBaggedParams::default();
         let (fit_result, _) = bagged::fit(x.view(), y.view(), &hyperparameters);
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();
@@ -56,14 +49,7 @@ mod tests {
     #[test]
     fn test_tgf_averaged_fit() {
         let (x, y) = setup_data_csv();
-        let hyperparameters = TreeGridFamilyAveragedParams {
-            B: 100,
-            tg_params: TreeGridParams {
-                n_iter: 100,
-                split_try: 10,
-                colsample_bytree: 1.0,
-            },
-        };
+        let hyperparameters = TreeGridFamilyAveragedParams::default();
         let (fit_result, _) = averaged::fit(x.view(), y.view(), &hyperparameters);
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();

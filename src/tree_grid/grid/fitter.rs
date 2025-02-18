@@ -33,6 +33,7 @@ pub struct TreeGridParams {
     pub n_iter: usize,
     pub split_try: usize,
     pub colsample_bytree: f64,
+    pub identified: bool,
 }
 
 impl Default for TreeGridParams {
@@ -41,6 +42,7 @@ impl Default for TreeGridParams {
             n_iter: 50,
             split_try: 10,
             colsample_bytree: 1.0,
+            identified: true,
         }
     }
 }
