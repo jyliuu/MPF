@@ -82,6 +82,41 @@ mod tests {
     }
 
     #[test]
+    fn test_model_seeding_works() {
+        let (x, y) = setup_data_csv();
+
+        let hyperparameters = TreeGridParams::default();
+        let seed = 42;
+
+        let (fit_result_1, _) = fitter::fit_seeded(x.view(), y.view(), &hyperparameters, seed);
+        let (fit_result_2, _) = fitter::fit_seeded(x.view(), y.view(), &hyperparameters, seed);
+
+        let diff = &fit_result_1.y_hat - &fit_result_2.y_hat;
+        assert!(diff.iter().all(|&x| x < 1e-6));
+    }
+
+    #[test]
+    fn test_model_predict_identified_equals_unidentified() {
+        let (x, y) = setup_data_csv();
+
+        let mut hyperparameters = TreeGridParams::default();
+        let (_, fit_identified) = fitter::fit(x.view(), y.view(), &hyperparameters);
+
+        hyperparameters.identified = false;
+
+        let (_, fit_unidentified) = fitter::fit(x.view(), y.view(), &hyperparameters);
+
+        println!("Identified scaling: {:?}", fit_identified.scaling);
+        let y_hat_identified = fit_identified.predict(x.view());
+        let y_hat_unidentified = fit_unidentified.predict(x.view());
+
+        let diff = &y_hat_identified - &y_hat_unidentified;
+        println!("diff: {diff:?}");
+
+        assert!(diff.iter().all(|&x| x < 1e-6));
+    }
+
+    #[test]
     fn test_model_predict() {
         let (x, y) = setup_data_csv();
         let (fit_result, tree_grid) = fitter::fit(x.view(), y.view(), &TreeGridParams::default());
