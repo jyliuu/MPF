@@ -167,10 +167,6 @@ mod tests {
             fit_averaged, fit_bagged, fit_grown, MPFAveragedParams, MPFBaggedParams, MPFParams,
         },
         test_data::setup_data_csv,
-        tree_grid::{
-            family::{averaged::TreeGridFamilyAveragedParams, bagged::TreeGridFamilyBaggedParams},
-            grid::fitter::TreeGridParams,
-        },
         FittedModel,
     };
 

@@ -28,7 +28,7 @@ mod tests {
     use bagged::TreeGridFamilyBaggedParams;
     use grown::TreeGridFamilyGrownParams;
 
-    use crate::{tree_grid::grid::fitter::TreeGridParams, FittedModel};
+    use crate::FittedModel;
 
     use super::*;
 

@@ -159,11 +159,7 @@ impl TreeGridFamily<BaggedVariant> {
             combined_grid_values.push(new_grid_values);
         }
 
-        FittedTreeGrid {
-            splits: combined_splits,
-            intervals: combined_intervals,
-            grid_values: combined_grid_values,
-        }
+        FittedTreeGrid::new(combined_splits, combined_intervals, combined_grid_values)
     }
 }
 

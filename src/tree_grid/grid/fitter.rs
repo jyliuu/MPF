@@ -26,6 +26,7 @@ pub struct TreeGridFitter<'a> {
     pub x: ArrayView2<'a, f64>,
     pub y_hat: Array1<f64>,
     pub residuals: Array1<f64>,
+    pub scaling: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -295,6 +296,50 @@ impl TreeGridFitter<'_> {
             update_b,
         );
     }
+
+    fn identify(&mut self) {
+        let mut weights: Vec<Vec<f64>> = self
+            .grid_values
+            .iter()
+            .map(|col| vec![0.0; col.len()])
+            .collect();
+
+        for (i, row) in self.leaf_points.axis_iter(Axis(0)).enumerate() {
+            for (j, &idx) in row.iter().enumerate() {
+                weights[j][idx] += 1.0;
+            }
+        }
+
+        for dim in 0..self.grid_values.len() {
+            let weights_sum: f64 = weights[dim].iter().sum();
+            let sign_changing = self.grid_values[dim].iter().any(|&x| x.is_sign_negative())
+                & self.grid_values[dim].iter().any(|&x| x.is_sign_positive());
+
+            let weighted_mean = self.grid_values[dim]
+                .iter()
+                .zip(weights[dim].iter())
+                .map(|(&x, &w)| x * w)
+                .sum::<f64>()
+                / weights_sum;
+
+            let scale = if sign_changing {
+                let l2_weighted_norm = self.grid_values[dim]
+                    .iter()
+                    .zip(weights[dim].iter())
+                    .map(|(&x, &w)| x.powi(2) * w)
+                    .sum::<f64>();
+                weighted_mean.signum() * (l2_weighted_norm / weights_sum).sqrt()
+            } else {
+                weighted_mean
+            };
+
+            self.grid_values.iter_mut().for_each(|col| {
+                col.iter_mut().for_each(|x| *x /= scale);
+            });
+
+            self.scaling *= scale;
+        }
+    }
 }
 
 impl<'a> ModelFitter for TreeGridFitter<'a> {
@@ -306,7 +351,8 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
     fn new(x: Self::Features, y: Self::Labels) -> Self {
         let leaf_points = Array2::zeros((x.nrows(), x.ncols()));
         let splits = vec![vec![]; x.ncols()];
-        let intervals = vec![vec![(f64::NEG_INFINITY, f64::INFINITY)]; x.ncols()];
+        let intervals: Vec<Vec<(f64, f64)>> =
+            vec![vec![(f64::NEG_INFINITY, f64::INFINITY)]; x.ncols()];
 
         let (_, grid_values, y_hat) = compute_initial_values(x, y);
         let residuals = y.to_owned() - &y_hat;
@@ -320,6 +366,7 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
             x,
             y_hat,
             residuals,
+            scaling: 1.0,
         }
     }
 
@@ -327,26 +374,29 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
         let mut rng = rand::thread_rng();
         let n_cols = self.x.ncols();
         let n_rows = self.x.nrows();
-        let n_cols_to_sample = (hyperparameters.colsample_bytree * n_cols as f64) as usize;
 
-        let split_idx: Vec<usize> = sample(
-            &mut rng,
-            n_rows,
-            hyperparameters.split_try * hyperparameters.n_iter,
-        )
-        .into_iter()
-        .collect();
+        let &Self::HyperParameters {
+            n_iter,
+            split_try,
+            colsample_bytree,
+            identified,
+        } = hyperparameters;
 
-        let col_idx: Vec<usize> = (0..n_cols_to_sample * hyperparameters.n_iter)
+        let n_cols_to_sample = (colsample_bytree * n_cols as f64) as usize;
+
+        let split_idx: Vec<usize> = sample(&mut rng, n_rows, split_try * n_iter)
+            .into_iter()
+            .collect();
+
+        let col_idx: Vec<usize> = (0..n_cols_to_sample * n_iter)
             .map(|_| rng.gen_range(0..n_cols))
             .collect();
 
-        for iter in 0..hyperparameters.n_iter {
+        for iter in 0..n_iter {
             let mut best_candidate: Option<RefineCandidate> = None;
             let mut best_err_diff = f64::NEG_INFINITY;
 
-            let curr_it_split_idx = &split_idx
-                [iter * hyperparameters.split_try..(iter + 1) * hyperparameters.split_try];
+            let curr_it_split_idx = &split_idx[iter * split_try..(iter + 1) * split_try];
 
             let curr_it_col_idx = &col_idx[iter * n_cols_to_sample..(iter + 1) * n_cols_to_sample];
 
@@ -379,14 +429,14 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
         }
 
         let err = self.residuals.pow2().mean().unwrap();
-
+        if identified {
+            self.identify();
+        }
         let residuals = self.residuals;
         let y_hat = self.y_hat;
-        let tree_grid = FittedTreeGrid {
-            splits: self.splits,
-            intervals: self.intervals,
-            grid_values: self.grid_values,
-        };
+
+        let mut tree_grid = FittedTreeGrid::new(self.splits, self.intervals, self.grid_values);
+        tree_grid.scaling = self.scaling;
 
         let fit_res = FitResult {
             err,
@@ -400,7 +450,7 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
 
 #[cfg(test)]
 mod tests {
-    
+
     use super::*;
     use crate::test_data::setup_data_hardcoded;
 

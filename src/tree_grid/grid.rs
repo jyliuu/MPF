@@ -1,5 +1,3 @@
-use std::ops::Div;
-
 use fitter::TreeGridFitter;
 use ndarray::{Array1, ArrayView2, Axis};
 
@@ -12,6 +10,7 @@ pub struct FittedTreeGrid {
     pub splits: Vec<Vec<f64>>,
     pub intervals: Vec<Vec<(f64, f64)>>,
     pub grid_values: Vec<Vec<f64>>,
+    pub scaling: f64,
 }
 
 impl FittedTreeGrid {
@@ -24,23 +23,8 @@ impl FittedTreeGrid {
             splits,
             intervals,
             grid_values,
+            scaling: 1.0,
         }
-    }
-
-    pub fn identify(&self) -> (f64, FittedTreeGrid) {
-        let mut identified = self.clone();
-        let gv = &mut identified.grid_values;
-        let mut scaling = 1.0;
-        for (i, grid) in gv.iter_mut().enumerate() {
-            let n = grid.len();
-            let norm = grid.iter().map(|x| x.powi(2).div(n as f64)).sum::<f64>();
-            let sum = grid.iter().sum::<f64>();
-            let factor = norm * sum.signum();
-            scaling *= factor;
-
-            grid.iter_mut().for_each(|x| *x /= factor);
-        }
-        (scaling, identified)
     }
 }
 
@@ -58,7 +42,7 @@ impl FittedModel for FittedTreeGrid {
             }
             y_hat[i] = prod;
         }
-        y_hat
+        self.scaling * y_hat
     }
 }
 
@@ -68,6 +52,7 @@ impl<'a> From<TreeGridFitter<'a>> for FittedTreeGrid {
             splits: fitter.splits,
             intervals: fitter.intervals,
             grid_values: fitter.grid_values,
+            scaling: fitter.scaling,
         }
     }
 }
