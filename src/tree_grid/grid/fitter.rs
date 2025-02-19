@@ -324,7 +324,7 @@ impl TreeGridFitter<'_> {
         for dim in 0..self.grid_values.len() {
             let weights_sum: f64 = weights[dim].iter().sum();
             let sign_changing = self.grid_values[dim].iter().any(|&x| x.is_sign_negative())
-                & self.grid_values[dim].iter().any(|&x| x.is_sign_positive());
+                && self.grid_values[dim].iter().any(|&x| x.is_sign_positive());
 
             let weighted_mean = self.grid_values[dim]
                 .iter()
@@ -344,10 +344,7 @@ impl TreeGridFitter<'_> {
                 weighted_mean
             };
 
-            self.grid_values.iter_mut().for_each(|col| {
-                col.iter_mut().for_each(|x| *x /= scale);
-            });
-
+            self.grid_values[dim].iter_mut().for_each(|x| *x /= scale);
             self.scaling *= scale;
         }
     }
@@ -438,6 +435,10 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
             }
 
             if let Some(candidate) = best_candidate {
+                println!(
+                    "iter: {:?}, splitting on col: {:?} split: {:?}",
+                    iter, candidate.col, candidate.split
+                );
                 self.update_tree(candidate);
             }
         }
