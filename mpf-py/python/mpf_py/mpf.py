@@ -89,7 +89,6 @@ class MPF:
         ) -> tuple["MPF.Bagged", "FitResult"]:
             mpf_bagged, fr = _MPFBagged.fit(x, y, epochs, B, n_iter, split_try, colsample_bytree)
             instance = cls(mpf_bagged)
-            instance._tree_grid_families = [[TreeGrid(tg) for tg in tf] for tf in instance.tree_grid_families]
             return instance, fr
 
         def predict(self, x: np.typing.NDArray[np.float64]) -> np.typing.NDArray[np.float64]:
@@ -112,7 +111,6 @@ class MPF:
         ) -> tuple["MPF.Grown", "FitResult"]:
             mpf_grown, fr = _MPFGrown.fit(x, y, n_iter, split_try, colsample_bytree)
             instance = cls(mpf_grown)
-            instance._tree_grid_families = [[TreeGrid(tg) for tg in tf] for tf in instance.tree_grid_families]
             return instance, fr
 
 

@@ -73,6 +73,42 @@ impl From<FitResult> for FitResultPy {
 }
 
 #[derive(Debug)]
+#[pyclass(name = "TreeGridFamilyBagged")]
+pub struct TreeGridFamilyBaggedPy(TreeGridFamily<BaggedVariant>);
+
+#[pymethods]
+impl TreeGridFamilyBaggedPy {
+    #[getter]
+    pub fn get_tree_grids<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let tree_grids_py: Vec<TreeGridPy> = self
+            .0
+            .get_tree_grids()
+            .iter()
+            .map(|tg| TreeGridPy::from(tg.clone()))
+            .collect();
+
+        PyList::new(py, tree_grids_py)
+    }
+
+    #[getter]
+    pub fn get_combined_tree_grid(&self, py: Python<'_>) -> PyResult<TreeGridPy> {
+        let combined_tree_grid = self.0.combine_into_single_tree_grid();
+        Ok(TreeGridPy::from(combined_tree_grid))
+    }
+
+    #[pyo3(name = "predict")]
+    pub fn _predict<'py>(
+        &self,
+        py: Python<'py>,
+        x: PyReadonlyArray2<'py, f64>,
+    ) -> PyResult<Bound<'py, PyArray1<f64>>> {
+        let x = x.as_array();
+        let y_hat = self.0.predict(x);
+        Ok(y_hat.to_pyarray(py))
+    }
+}
+
+#[derive(Debug)]
 #[pyclass(name = "MPFBagged")]
 pub struct MPFBaggedPy(MPF<TreeGridFamily<BaggedVariant>>);
 
@@ -96,16 +132,11 @@ impl From<MPF<TreeGridFamily<GrownVariant>>> for MPFGrownPy {
 impl MPFBaggedPy {
     #[getter]
     pub fn get_tree_grid_families<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let tree_grid_families_py: Vec<Vec<TreeGridPy>> = self
+        let tree_grid_families_py: Vec<TreeGridFamilyBaggedPy> = self
             .0
             .get_tree_grid_families()
             .iter()
-            .map(|tgf: &TreeGridFamily<BaggedVariant>| {
-                tgf.get_tree_grids()
-                    .iter()
-                    .map(|tg| TreeGridPy::from(tg.clone()))
-                    .collect()
-            })
+            .map(|tgf: &TreeGridFamily<BaggedVariant>| TreeGridFamilyBaggedPy(tgf.clone()))
             .collect();
 
         PyList::new(py, tree_grid_families_py)
@@ -134,6 +165,7 @@ impl MPFBaggedPy {
         n_iter: usize,
         split_try: usize,
         colsample_bytree: f64,
+        identified: bool,
     ) -> PyResult<(MPFBaggedPy, FitResultPy)> {
         let x = x.as_array();
         let y = y.as_array();
@@ -145,6 +177,7 @@ impl MPFBaggedPy {
                     n_iter,
                     split_try,
                     colsample_bytree,
+                    identified,
                 },
             },
         };
@@ -248,6 +281,7 @@ impl TreeGridPy {
         n_iter: usize,
         split_try: usize,
         colsample_bytree: f64,
+        identified: bool,
     ) -> PyResult<(TreeGridPy, FitResultPy)> {
         let x = x.as_array();
         let y = y.as_array();
@@ -255,6 +289,7 @@ impl TreeGridPy {
             n_iter,
             split_try,
             colsample_bytree,
+            identified,
         };
         let tg_fitter = TreeGridFitter::new(x.view(), y.view());
         let (fit_result, tg) = tg_fitter.fit(&params);
