@@ -4,6 +4,7 @@ pub mod forest;
 pub mod test_data;
 pub mod tree_grid;
 use ndarray::{Array1, ArrayView2};
+use rand::Rng;
 
 #[derive(Debug)]
 pub struct FitResult {
@@ -23,5 +24,9 @@ pub trait ModelFitter {
     type Labels;
 
     fn new(x: Self::Features, y: Self::Labels) -> Self;
-    fn fit(self, hyperparameters: &Self::HyperParameters) -> (FitResult, Self::Model);
+    fn fit<R: Rng>(
+        self,
+        hyperparameters: &Self::HyperParameters,
+        rng: &mut R,
+    ) -> (FitResult, Self::Model);
 }
