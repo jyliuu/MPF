@@ -1,4 +1,5 @@
 use pyo3::{prelude::*, types::PyList};
+use rand::{rngs::StdRng, SeedableRng};
 
 use core::f64;
 use std::ops::{Deref, DerefMut};
@@ -18,7 +19,7 @@ use mpf::{
         },
         grid::{self, fitter::TreeGridParams, FittedTreeGrid},
     },
-    FitResult, FittedModel, ModelFitter,
+    FitResult, FittedModel,
 };
 
 use numpy::{PyReadonlyArray1, PyReadonlyArray2};
@@ -174,6 +175,7 @@ impl MPFBaggedPy {
         split_try: usize,
         colsample_bytree: f64,
         identified: bool,
+        seed: u64,
     ) -> PyResult<(MPFBaggedPy, FitResultPy)> {
         let x = x.as_array();
         let y = y.as_array();
@@ -188,6 +190,7 @@ impl MPFBaggedPy {
                     identified,
                 },
             },
+            seed,
         };
         let (fit_result, mpf) = fit_bagged(x, y, &params);
         Ok((mpf.into(), FitResultPy::from(fit_result)))
@@ -235,6 +238,7 @@ impl MPFGrownPy {
         n_iter: usize,
         m_try: f64,
         split_try: usize,
+        seed: u64,
     ) -> PyResult<(MPFGrownPy, FitResultPy)> {
         let x = x.as_array();
         let y = y.as_array();
@@ -243,6 +247,7 @@ impl MPFGrownPy {
             n_iter,
             m_try,
             split_try,
+            seed,
         };
         let (fit_result, mpf) = fit_grown(x, y, params);
         Ok((mpf.into(), FitResultPy::from(fit_result)))
@@ -295,6 +300,7 @@ impl TreeGridPy {
         split_try: usize,
         colsample_bytree: f64,
         identified: bool,
+        seed: u64,
     ) -> PyResult<(TreeGridPy, FitResultPy)> {
         let x = x.as_array();
         let y = y.as_array();
@@ -304,7 +310,8 @@ impl TreeGridPy {
             colsample_bytree,
             identified,
         };
-        let (fit_result, tg) = grid::fitter::fit(x.view(), y.view(), &params);
+        let mut rng = StdRng::seed_from_u64(seed);
+        let (fit_result, tg) = grid::fitter::fit(x.view(), y.view(), &params, &mut rng);
         Ok((tg.into(), FitResultPy::from(fit_result)))
     }
 }

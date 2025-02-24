@@ -37,6 +37,7 @@ fn main() {
             B: 10,
             tg_params: TreeGridParams::default(),
         },
+        seed: 42,
     };
 
     let (fr, model) = fit_bagged(x_train.view(), y_train.view(), &params);

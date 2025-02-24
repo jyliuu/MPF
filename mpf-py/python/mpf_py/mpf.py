@@ -91,8 +91,9 @@ class MPF:
             split_try: int, 
             colsample_bytree: float,
             identified: bool = True,
+            seed: int = 42
         ) -> tuple["MPF.Bagged", "FitResult"]:
-            mpf_bagged, fr = _MPFBagged.fit(x, y, epochs, B, n_iter, split_try, colsample_bytree, identified)
+            mpf_bagged, fr = _MPFBagged.fit(x, y, epochs, B, n_iter, split_try, colsample_bytree, identified, seed)
             instance = cls(mpf_bagged)
             instance._tree_grid_families_lst = [[TreeGrid(tg) for tg in tf.tree_grids] for tf in instance.tree_grid_families]
             return instance, fr
@@ -113,9 +114,10 @@ class MPF:
             y: np.typing.NDArray[np.float64],
             n_iter: int,
             split_try: int, 
-            colsample_bytree: float
+            colsample_bytree: float,
+            seed: int = 42
         ) -> tuple["MPF.Grown", "FitResult"]:
-            mpf_grown, fr = _MPFGrown.fit(x, y, n_iter, split_try, colsample_bytree)
+            mpf_grown, fr = _MPFGrown.fit(x, y, n_iter, split_try, colsample_bytree, seed)
             instance = cls(mpf_grown)
             instance._tree_grid_families_lst = [[TreeGrid(tg) for tg in tf.tree_grids] for tf in instance.tree_grid_families]
             return instance, fr

@@ -272,6 +272,7 @@ mod tests {
             y.view(),
             &MPFBaggedParams {
                 epochs: 2,
+                seed: 42,
                 tgf_params: TreeGridFamilyBaggedParams {
                     B: 20,
                     tg_params: TreeGridParams {

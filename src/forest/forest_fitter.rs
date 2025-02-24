@@ -18,6 +18,7 @@ pub struct MPFParams {
     pub n_iter: usize,
     pub m_try: f64,
     pub split_try: usize,
+    pub seed: u64,
 }
 
 impl Default for MPFParams {
@@ -27,6 +28,7 @@ impl Default for MPFParams {
             n_iter: 100,
             m_try: 1.0,
             split_try: 10,
+            seed: 42,
         }
     }
 }
@@ -34,6 +36,7 @@ impl Default for MPFParams {
 pub struct MPFBaggedParams {
     pub epochs: usize,
     pub tgf_params: TreeGridFamilyBaggedParams,
+    pub seed: u64,
 }
 
 impl Default for MPFBaggedParams {
@@ -41,6 +44,7 @@ impl Default for MPFBaggedParams {
         MPFBaggedParams {
             epochs: 5,
             tgf_params: TreeGridFamilyBaggedParams::default(),
+            seed: 42,
         }
     }
 }
@@ -48,6 +52,7 @@ impl Default for MPFBaggedParams {
 pub struct MPFAveragedParams {
     pub epochs: usize,
     pub tgf_params: TreeGridFamilyAveragedParams,
+    pub seed: u64,
 }
 
 impl Default for MPFAveragedParams {
@@ -55,6 +60,7 @@ impl Default for MPFAveragedParams {
         MPFAveragedParams {
             epochs: 5,
             tgf_params: TreeGridFamilyAveragedParams::default(),
+            seed: 42,
         }
     }
 }
@@ -64,12 +70,13 @@ pub fn fit_grown(
     y: ArrayView1<f64>,
     hyperparameters: MPFParams,
 ) -> (FitResult, MPF<TreeGridFamily<GrownVariant>>) {
-    let mut rng = StdRng::seed_from_u64(42);
+    let mut rng = StdRng::seed_from_u64(hyperparameters.seed);
     let MPFParams {
         n_families,
         n_iter,
         m_try,
         split_try,
+        seed: _,
     } = hyperparameters;
     let mut fitted_tree_grid_families = Vec::new();
     let mut fit_results = Vec::new();
@@ -109,8 +116,12 @@ pub fn fit_bagged(
     y: ArrayView1<f64>,
     hyperparameters: &MPFBaggedParams,
 ) -> (FitResult, MPF<TreeGridFamily<BaggedVariant>>) {
-    let mut rng = StdRng::seed_from_u64(42);
-    let MPFBaggedParams { epochs, tgf_params } = hyperparameters;
+    let mut rng = StdRng::seed_from_u64(hyperparameters.seed);
+    let MPFBaggedParams {
+        epochs,
+        tgf_params,
+        seed: _,
+    } = hyperparameters;
 
     // Ensure that x_input and y_input have the same lifetime ('c) during this loop.
     let mut y_new = y.to_owned();
@@ -137,8 +148,12 @@ pub fn fit_averaged(
     y: ArrayView1<f64>,
     hyperparameters: MPFAveragedParams,
 ) -> (FitResult, MPF<TreeGridFamily<AveragedVariant>>) {
-    let mut rng = StdRng::seed_from_u64(42);
-    let MPFAveragedParams { epochs, tgf_params } = hyperparameters;
+    let mut rng = StdRng::seed_from_u64(hyperparameters.seed);
+    let MPFAveragedParams {
+        epochs,
+        tgf_params,
+        seed: _,
+    } = hyperparameters;
 
     let mut tree_grid_families = Vec::new();
     let mut residuals = Array1::zeros(y.len());
@@ -165,17 +180,19 @@ pub fn fit_averaged(
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Div;
-
-    use ndarray::s;
-
     use crate::{
         forest::forest_fitter::{
             fit_averaged, fit_bagged, fit_grown, MPFAveragedParams, MPFBaggedParams, MPFParams,
         },
         test_data::setup_data_csv,
+        tree_grid::{
+            family::{averaged::TreeGridFamilyAveragedParams, bagged::TreeGridFamilyBaggedParams},
+            grid::fitter::TreeGridParams,
+        },
         FittedModel,
     };
+    use ndarray::s;
+    use std::ops::Div;
 
     #[test]
     fn test_mpf_fit() {
@@ -196,6 +213,7 @@ mod tests {
                 n_iter: 100,
                 m_try: 1.0,
                 split_try: 10,
+                seed: 42,
             },
         );
 
@@ -225,7 +243,12 @@ mod tests {
         let x_test = x.slice(s![n / 2.., ..]);
         let y_test = y.slice(s![n / 2..]);
 
-        let (fit_result, mpf) = fit_bagged(x_train, y_train, &MPFBaggedParams::default());
+        let params = MPFBaggedParams {
+            epochs: 5,
+            tgf_params: TreeGridFamilyBaggedParams::default(),
+            seed: 42,
+        };
+        let (fit_result, mpf) = fit_bagged(x_train, y_train, &params);
         let mean = y_test.mean().unwrap();
         let base_err = y_test.view().map(|v| v - mean).powi(2).mean().unwrap();
         let preds = mpf.predict(x_test.view());
@@ -252,7 +275,12 @@ mod tests {
         let x_test = x.slice(s![n / 2.., ..]);
         let y_test = y.slice(s![n / 2..]);
 
-        let (fit_result, mpf) = fit_averaged(x_train, y_train, MPFAveragedParams::default());
+        let params = MPFAveragedParams {
+            epochs: 5,
+            tgf_params: TreeGridFamilyAveragedParams::default(),
+            seed: 42,
+        };
+        let (fit_result, mpf) = fit_averaged(x_train, y_train, params);
         let mean = y_test.mean().unwrap();
         let base_err = y_test.view().map(|v| v - mean).powi(2).mean().unwrap();
         let preds = mpf.predict(x_test.view());
@@ -279,10 +307,80 @@ mod tests {
                 n_iter: 100,
                 m_try: 1.0,
                 split_try: 10,
+                seed: 42,
             },
         );
         let pred = mpf.predict(x.view());
         let diff = fit_result.y_hat - pred;
         assert!(diff.iter().all(|&x| x < 1e-6));
+    }
+
+    #[test]
+    fn test_mpf_bagged_reproducibility() {
+        let (x, y) = setup_data_csv();
+        let params = MPFBaggedParams {
+            epochs: 2,
+            tgf_params: TreeGridFamilyBaggedParams {
+                B: 5,
+                tg_params: TreeGridParams {
+                    n_iter: 10,
+                    split_try: 5,
+                    colsample_bytree: 1.0,
+                    identified: true,
+                },
+            },
+            seed: 42,
+        };
+
+        // Train two models with the same seed
+        let (_, model1) = fit_bagged(x.view(), y.view(), &params);
+        let (_, model2) = fit_bagged(x.view(), y.view(), &params);
+
+        // Generate predictions
+        let pred1 = model1.predict(x.view());
+        let pred2 = model2.predict(x.view());
+
+        // Check predictions are identical
+        let diff = &pred1 - &pred2;
+        assert!(
+            diff.iter().all(|&x| x.abs() < 1e-10),
+            "Models with same seed produced different predictions"
+        );
+    }
+
+    #[test]
+    fn test_mpf_bagged_different_seeds() {
+        let (x, y) = setup_data_csv();
+        let base_params = MPFBaggedParams {
+            epochs: 2,
+            tgf_params: TreeGridFamilyBaggedParams {
+                B: 5,
+                tg_params: TreeGridParams {
+                    n_iter: 10,
+                    split_try: 5,
+                    colsample_bytree: 1.0,
+                    identified: true,
+                },
+            },
+            seed: 42,
+        };
+
+        // Train models with different seeds
+        let (_, model1) = fit_bagged(x.view(), y.view(), &base_params);
+
+        let mut params2 = base_params;
+        params2.seed = 43;
+        let (_, model2) = fit_bagged(x.view(), y.view(), &params2);
+
+        // Generate predictions
+        let pred1 = model1.predict(x.view());
+        let pred2 = model2.predict(x.view());
+
+        // Check predictions are different
+        let diff = &pred1 - &pred2;
+        assert!(
+            diff.iter().any(|&x| x.abs() > 1e-10),
+            "Models with different seeds produced identical predictions"
+        );
     }
 }
