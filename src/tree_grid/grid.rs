@@ -5,6 +5,83 @@ use crate::FittedModel;
 
 pub mod fitter;
 
+pub fn compute_inner_product(first: &FittedTreeGrid, second: &FittedTreeGrid, dim: usize) -> f64 {
+    let first_splits = &first.splits[dim];
+    let first_intervals = &first.intervals[dim];
+    let first_values = &first.grid_values[dim];
+
+    let second_splits = &second.splits[dim];
+    let second_intervals = &second.intervals[dim];
+    let second_values = &second.grid_values[dim];
+
+    // Combine all split points
+    let mut all_splits: Vec<f64> = first_splits
+        .iter()
+        .chain(second_splits.iter())
+        .copied()
+        .collect();
+    all_splits.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    all_splits.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
+
+    // Create sub-intervals from combined splits
+    let mut sub_intervals = Vec::new();
+    if all_splits.is_empty() {
+        sub_intervals.push((f64::NEG_INFINITY, f64::INFINITY));
+    } else {
+        sub_intervals.push((f64::NEG_INFINITY, all_splits[0]));
+        for i in 0..all_splits.len() - 1 {
+            sub_intervals.push((all_splits[i], all_splits[i + 1]));
+        }
+        sub_intervals.push((all_splits[all_splits.len() - 1], f64::INFINITY));
+    }
+
+    // Compute inner product over overlapping sub-intervals
+    let mut inner_product = 0.0;
+    for &(start, end) in &sub_intervals {
+        // Find the self interval containing this sub-interval
+        let self_idx = first_intervals
+            .iter()
+            .position(|&(a, b)| start >= a && end <= b)
+            .unwrap();
+        let self_val = first_values[self_idx];
+
+        // Find the other interval containing this sub-interval
+        let other_idx = second_intervals
+            .iter()
+            .position(|&(a, b)| start >= a && end <= b)
+            .unwrap();
+        let other_val = second_values[other_idx];
+
+        // Multiply values for this overlap (no weighting by interval length here)
+        inner_product += self_val * other_val;
+    }
+
+    inner_product
+}
+
+pub fn align_treegrid_to_reference_signs(
+    first: &FittedTreeGrid,
+    reference: &FittedTreeGrid,
+) -> Vec<f64> {
+    (0..first.grid_values.len())
+        .map(|dim| compute_inner_product(first, reference, dim).signum())
+        .collect()
+}
+
+pub fn get_aligned_signs_for_all_tree_grids(tree_grids: &[FittedTreeGrid]) -> Vec<Vec<f64>> {
+    let reference = &tree_grids[0];
+    let aligned_signs: Vec<Vec<f64>> = std::iter::once(vec![1.0; reference.grid_values.len()])
+        .chain(
+            tree_grids
+                .iter()
+                .skip(1)
+                .map(|grid| align_treegrid_to_reference_signs(grid, reference)),
+        )
+        .collect();
+
+    aligned_signs
+}
+
 #[derive(Debug, Clone)]
 pub struct FittedTreeGrid {
     pub splits: Vec<Vec<f64>>,

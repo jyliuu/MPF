@@ -308,7 +308,7 @@ impl TreeGridFitter<'_> {
         );
     }
 
-    fn identify(&mut self) {
+    fn get_component_weights(&self) -> Vec<Vec<f64>> {
         let mut weights: Vec<Vec<f64>> = self
             .grid_values
             .iter()
@@ -320,6 +320,12 @@ impl TreeGridFitter<'_> {
                 weights[j][idx] += 1.0;
             }
         }
+
+        weights
+    }
+
+    fn identify(&mut self) {
+        let weights = self.get_component_weights();
 
         for dim in 0..self.grid_values.len() {
             let weights_sum: f64 = weights[dim].iter().sum();
@@ -345,6 +351,76 @@ impl TreeGridFitter<'_> {
             };
 
             self.grid_values[dim].iter_mut().for_each(|x| *x /= scale);
+            self.scaling *= scale;
+        }
+    }
+
+    fn identify_single_point_sign(&mut self) {
+        let weights = self.get_component_weights();
+
+        for dim in 0..self.grid_values.len() {
+            let curr_weights = &weights[dim];
+            let curr_grid_values = &mut self.grid_values[dim];
+
+            let weights_sum: f64 = curr_weights.iter().sum();
+            let sign_changing = curr_grid_values.iter().any(|&x| x.is_sign_negative())
+                && curr_grid_values.iter().any(|&x| x.is_sign_positive());
+
+            let interval_id_contains_0 = self.intervals[dim]
+                .iter()
+                .position(|&(a, b)| a <= 0.0 && b >= 0.0)
+                .unwrap();
+
+            let sign = curr_grid_values[interval_id_contains_0].signum();
+
+            let weighted_mean = curr_grid_values
+                .iter()
+                .zip(weights[dim].iter())
+                .map(|(&x, &w)| x * w)
+                .sum::<f64>()
+                / weights_sum;
+
+            let scale = if sign_changing {
+                let l2_weighted_norm = curr_grid_values
+                    .iter()
+                    .zip(weights[dim].iter())
+                    .map(|(&x, &w)| x.powi(2) * w)
+                    .sum::<f64>();
+                sign * (l2_weighted_norm / weights_sum).sqrt()
+            } else {
+                weighted_mean
+            };
+
+            curr_grid_values.iter_mut().for_each(|x| *x /= scale);
+            self.scaling *= scale;
+        }
+    }
+
+    fn identify_no_sign(&mut self) {
+        let weights = self.get_component_weights();
+
+        for dim in 0..self.grid_values.len() {
+            let curr_weights = &weights[dim];
+            let curr_grid_values = &mut self.grid_values[dim];
+
+            let weights_sum: f64 = curr_weights.iter().sum();
+
+            let weighted_mean = curr_grid_values
+                .iter()
+                .zip(weights[dim].iter())
+                .map(|(&x, &w)| x * w)
+                .sum::<f64>()
+                / weights_sum;
+
+            let l2_weighted_norm = curr_grid_values
+                .iter()
+                .zip(weights[dim].iter())
+                .map(|(&x, &w)| x.powi(2) * w)
+                .sum::<f64>();
+
+            let scale = (l2_weighted_norm / weights_sum).sqrt();
+
+            curr_grid_values.iter_mut().for_each(|x| *x /= scale);
             self.scaling *= scale;
         }
     }
@@ -435,17 +511,13 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
             }
 
             if let Some(candidate) = best_candidate {
-                println!(
-                    "iter: {:?}, splitting on col: {:?} split: {:?}",
-                    iter, candidate.col, candidate.split
-                );
                 self.update_tree(candidate);
             }
         }
 
         let err = self.residuals.pow2().mean().unwrap();
         if identified {
-            self.identify();
+            self.identify_no_sign();
         }
         let residuals = self.residuals;
         let y_hat = self.y_hat;

@@ -2,7 +2,9 @@ use ndarray::{Array1, ArrayView1, ArrayView2};
 use rand::Rng;
 
 use crate::{
-    tree_grid::grid::{self, fitter::TreeGridParams},
+    tree_grid::grid::{
+        self, compute_inner_product, fitter::TreeGridParams, get_aligned_signs_for_all_tree_grids,
+    },
     FitResult, FittedModel,
 };
 
@@ -107,13 +109,52 @@ impl TreeGridFamily<BaggedVariant> {
         result
     }
 
+    fn predict_arithmetic_mean(&self, x: ArrayView2<f64>) -> Array1<f64> {
+        let mut result = Array1::zeros(x.shape()[0]);
+        for grid in &self.0 {
+            result += &grid.predict(x.view());
+        }
+        result /= self.0.len() as f64;
+        result
+    }
+
+    pub fn get_aligned_tree_grids(&self) -> Vec<FittedTreeGrid> {
+        let aligned_signs = get_aligned_signs_for_all_tree_grids(&self.0);
+        self.0
+            .iter()
+            .zip(aligned_signs.iter())
+            .enumerate()
+            .map(|(i, (grid, signs))| {
+                let mut new_grid = grid.clone();
+                let ipr: Vec<f64> = (0..new_grid.grid_values.len())
+                    .map(|dim| compute_inner_product(&new_grid, &self.0[0], dim))
+                    .collect();
+
+                for (axis, sign) in signs.iter().enumerate() {
+                    new_grid.scaling *= sign;
+                    new_grid.grid_values[axis] = new_grid.grid_values[axis]
+                        .iter()
+                        .map(|v| v * sign)
+                        .collect();
+                }
+                new_grid
+            })
+            .collect()
+    }
+
     pub fn combine_into_single_tree_grid(&self) -> FittedTreeGrid {
+        println!("Combining tree grids into a single tree grid.");
         let grids = &self.0;
-        let num_axes = grids[0].splits.len();
+        let reference = &grids[0];
+
+        let aligned_signs = get_aligned_signs_for_all_tree_grids(grids);
+        let num_axes = reference.splits.len();
+
         let mut combined_splits: Vec<Vec<f64>> = Vec::with_capacity(num_axes);
         let mut combined_intervals: Vec<Vec<(f64, f64)>> = Vec::with_capacity(num_axes);
         let mut combined_grid_values: Vec<Vec<f64>> = Vec::with_capacity(num_axes);
 
+        let scalings = grids.iter().map(|grid| grid.scaling).collect::<Vec<f64>>();
         // Process each axis separately.
         for axis in 0..num_axes {
             let mut splits: Vec<f64> = grids
@@ -138,7 +179,7 @@ impl TreeGridFamily<BaggedVariant> {
             for &(a, b) in &new_intervals {
                 let mut values: Vec<f64> = Vec::new();
                 // For each treegrid, find the grid value for which [a,b) is contained in its interval.
-                for grid in grids {
+                for (idx, grid) in grids.iter().enumerate() {
                     let mut found_value = None;
                     for (i, &(ia, ib)) in grid.intervals[axis].iter().enumerate() {
                         if a >= ia && b <= ib {
@@ -147,11 +188,12 @@ impl TreeGridFamily<BaggedVariant> {
                         }
                     }
                     if let Some(val) = found_value {
-                        values.push(val);
+                        values.push(aligned_signs[idx][axis] * val);
                     }
                 }
-                // Combine these values using a geometric mean that handles negatives.
-                let combined_val = geometric_mean(&values);
+                // Combine these values by taking simple average
+
+                let combined_val = values.iter().sum::<f64>() / values.len() as f64;
                 new_grid_values.push(combined_val);
             }
             combined_intervals.push(new_intervals);
@@ -159,7 +201,13 @@ impl TreeGridFamily<BaggedVariant> {
             combined_grid_values.push(new_grid_values);
         }
 
-        FittedTreeGrid::new(combined_splits, combined_intervals, combined_grid_values)
+        let combined_scaling = scalings.iter().sum::<f64>() / scalings.len() as f64;
+        FittedTreeGrid {
+            splits: combined_splits,
+            intervals: combined_intervals,
+            grid_values: combined_grid_values,
+            scaling: combined_scaling,
+        }
     }
 }
 
@@ -181,5 +229,83 @@ impl Default for TreeGridFamilyBaggedParams {
             B: 100,
             tg_params: TreeGridParams::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use ndarray::Array1;
+
+    use crate::{
+        forest::forest_fitter::{fit_bagged, MPFBaggedParams},
+        test_data::setup_data_csv,
+        tree_grid::grid::{fitter::TreeGridParams, FittedTreeGrid},
+        FittedModel,
+    };
+
+    use super::TreeGridFamilyBaggedParams;
+
+    #[test]
+    fn test_merged_tree_grids_predicts_the_same() {
+        let (x, y) = setup_data_csv();
+
+        let (fit_result, mpf) = fit_bagged(
+            x.view(),
+            y.view(),
+            &MPFBaggedParams {
+                epochs: 2,
+                tgf_params: TreeGridFamilyBaggedParams {
+                    B: 20,
+                    tg_params: TreeGridParams {
+                        n_iter: 10,
+                        split_try: 10,
+                        colsample_bytree: 1.0,
+                        identified: true,
+                    },
+                },
+            },
+        );
+
+        let merged_tree_grids: Vec<FittedTreeGrid> = mpf
+            .get_tree_grid_families()
+            .iter()
+            .map(|tgf| tgf.combine_into_single_tree_grid())
+            .collect();
+
+        let merged_predictions: Vec<Array1<f64>> = merged_tree_grids
+            .iter()
+            .map(|tg| tg.predict(x.view()))
+            .collect();
+
+        let mpf_predictions: Vec<Array1<f64>> = mpf
+            .get_tree_grid_families()
+            .iter()
+            .map(|tgf| tgf.predict(x.view()))
+            .collect();
+
+        for (merged_pred, mpf_pred) in merged_predictions.iter().zip(mpf_predictions.iter()) {
+            let diff = merged_pred - mpf_pred;
+            println!(
+                "diff max: {:?}",
+                diff.iter().max_by(|a, b| a.partial_cmp(b).unwrap())
+            );
+            println!(
+                "diff min: {:?}",
+                diff.iter().min_by(|a, b| a.partial_cmp(b).unwrap())
+            );
+        }
+
+        let mpf_pred = mpf_predictions
+            .iter()
+            .fold(Array1::zeros(x.nrows()), |acc: Array1<f64>, pred| {
+                acc + pred
+            });
+
+        let merged_pred = merged_predictions
+            .iter()
+            .fold(Array1::zeros(x.nrows()), |acc: Array1<f64>, pred| {
+                acc + pred
+            });
     }
 }
