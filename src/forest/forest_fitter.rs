@@ -1,37 +1,15 @@
-use ndarray::{Array1, ArrayView1, ArrayView2};
+use ndarray::{ArrayView1, ArrayView2};
 use rand::{rngs::StdRng, SeedableRng};
 
 use crate::{
     tree_grid::family::{
-        averaged::{self, AveragedVariant, TreeGridFamilyAveragedParams},
         bagged::{self, BaggedVariant, TreeGridFamilyBaggedParams},
-        grown::{self, GrownVariant, TreeGridFamilyGrownParams},
         TreeGridFamily,
     },
     FitResult,
 };
 
 use super::mpf::MPF;
-
-pub struct MPFParams {
-    pub n_families: usize,
-    pub n_iter: usize,
-    pub m_try: f64,
-    pub split_try: usize,
-    pub seed: u64,
-}
-
-impl Default for MPFParams {
-    fn default() -> Self {
-        MPFParams {
-            n_families: 100,
-            n_iter: 100,
-            m_try: 1.0,
-            split_try: 10,
-            seed: 42,
-        }
-    }
-}
 
 pub struct MPFBaggedParams {
     pub epochs: usize,
@@ -47,68 +25,6 @@ impl Default for MPFBaggedParams {
             seed: 42,
         }
     }
-}
-
-pub struct MPFAveragedParams {
-    pub epochs: usize,
-    pub tgf_params: TreeGridFamilyAveragedParams,
-    pub seed: u64,
-}
-
-impl Default for MPFAveragedParams {
-    fn default() -> Self {
-        MPFAveragedParams {
-            epochs: 5,
-            tgf_params: TreeGridFamilyAveragedParams::default(),
-            seed: 42,
-        }
-    }
-}
-
-pub fn fit_grown(
-    x: ArrayView2<f64>,
-    y: ArrayView1<f64>,
-    hyperparameters: MPFParams,
-) -> (FitResult, MPF<TreeGridFamily<GrownVariant>>) {
-    let mut rng = StdRng::seed_from_u64(hyperparameters.seed);
-    let MPFParams {
-        n_families,
-        n_iter,
-        m_try,
-        split_try,
-        seed: _,
-    } = hyperparameters;
-    let mut fitted_tree_grid_families = Vec::new();
-    let mut fit_results = Vec::new();
-    for _ in 0..n_families {
-        let (tgf_fit_result, tree_grid_family) = grown::fit(
-            x.view(),
-            y.view(),
-            &TreeGridFamilyGrownParams {
-                n_iter,
-                m_try,
-                split_try,
-            },
-            &mut rng,
-        );
-        fitted_tree_grid_families.push(tree_grid_family);
-        fit_results.push(tgf_fit_result);
-    }
-
-    let mut fit_result = fit_results
-        .into_iter()
-        .reduce(|a, b| FitResult {
-            err: 0.0,
-            residuals: a.residuals + b.residuals,
-            y_hat: a.y_hat + b.y_hat,
-        })
-        .unwrap();
-
-    fit_result.residuals /= n_families as f64;
-    fit_result.y_hat /= n_families as f64;
-    fit_result.err = fit_result.residuals.pow2().mean().unwrap();
-
-    (fit_result, MPF::new(fitted_tree_grid_families))
 }
 
 pub fn fit_bagged(
@@ -143,94 +59,16 @@ pub fn fit_bagged(
     (fit_result, MPF::new(tree_grid_families))
 }
 
-pub fn fit_averaged(
-    x: ArrayView2<f64>,
-    y: ArrayView1<f64>,
-    hyperparameters: MPFAveragedParams,
-) -> (FitResult, MPF<TreeGridFamily<AveragedVariant>>) {
-    let mut rng = StdRng::seed_from_u64(hyperparameters.seed);
-    let MPFAveragedParams {
-        epochs,
-        tgf_params,
-        seed: _,
-    } = hyperparameters;
-
-    let mut tree_grid_families = Vec::new();
-    let mut residuals = Array1::zeros(y.len());
-
-    for _ in 0..epochs {
-        let (fit_result, tree_grid_family) =
-            averaged::fit(x.view(), y.view(), &tgf_params, &mut rng);
-        tree_grid_families.push(tree_grid_family);
-        residuals += &fit_result.residuals;
-    }
-
-    let residuals = residuals / epochs as f64;
-    let y_hat = y.to_owned() - residuals.view();
-    let err = residuals.pow2().mean().unwrap();
-
-    let fit_result = FitResult {
-        err,
-        residuals,
-        y_hat,
-    };
-
-    (fit_result, MPF::new(tree_grid_families))
-}
-
 #[cfg(test)]
 mod tests {
     use crate::{
-        forest::forest_fitter::{
-            fit_averaged, fit_bagged, fit_grown, MPFAveragedParams, MPFBaggedParams, MPFParams,
-        },
+        forest::forest_fitter::{fit_bagged, MPFBaggedParams},
         test_data::setup_data_csv,
-        tree_grid::{
-            family::{averaged::TreeGridFamilyAveragedParams, bagged::TreeGridFamilyBaggedParams},
-            grid::fitter::TreeGridParams,
-        },
+        tree_grid::{family::bagged::TreeGridFamilyBaggedParams, grid::fitter::TreeGridParams},
         FittedModel,
     };
     use ndarray::s;
     use std::ops::Div;
-
-    #[test]
-    fn test_mpf_fit() {
-        let (x, y) = setup_data_csv();
-        let n = y.len();
-        println!("Fitting and testing on {} samples", n / 2);
-        let x_train = x.slice(s![..n / 2, ..]);
-        let y_train = y.slice(s![..n / 2]);
-
-        let x_test = x.slice(s![n / 2.., ..]);
-        let y_test = y.slice(s![n / 2..]);
-
-        let (fit_result, mpf) = fit_grown(
-            x_train,
-            y_train,
-            MPFParams {
-                n_families: 100,
-                n_iter: 100,
-                m_try: 1.0,
-                split_try: 10,
-                seed: 42,
-            },
-        );
-
-        let mean = y_test.mean().unwrap();
-        let base_err = y_test.view().map(|v| v - mean).powi(2).mean().unwrap();
-        let preds = mpf.predict(x_test.view());
-        let test_err: f64 = y_test
-            .indexed_iter()
-            .map(|(i, v)| (v - preds[i]).powi(2).div(y_test.len() as f64))
-            .sum();
-        println! {"Base error: {:?}, Training Error: {:?}, Test Error: {:?}", base_err, fit_result.err, test_err};
-
-        assert!(
-            fit_result.err < base_err,
-            "Error is not less than mean error"
-        );
-    }
 
     #[test]
     fn test_mpf_bagged_fit() {
@@ -262,57 +100,6 @@ mod tests {
             fit_result.err < base_err,
             "Error is not less than mean error"
         );
-    }
-
-    #[test]
-    fn test_mpf_averaged_fit() {
-        let (x, y) = setup_data_csv();
-        let n = y.len();
-        println!("Fitting and testing on {} samples", n / 2);
-        let x_train = x.slice(s![..n / 2, ..]);
-        let y_train = y.slice(s![..n / 2]);
-
-        let x_test = x.slice(s![n / 2.., ..]);
-        let y_test = y.slice(s![n / 2..]);
-
-        let params = MPFAveragedParams {
-            epochs: 5,
-            tgf_params: TreeGridFamilyAveragedParams::default(),
-            seed: 42,
-        };
-        let (fit_result, mpf) = fit_averaged(x_train, y_train, params);
-        let mean = y_test.mean().unwrap();
-        let base_err = y_test.view().map(|v| v - mean).powi(2).mean().unwrap();
-        let preds = mpf.predict(x_test.view());
-        let test_err: f64 = y_test
-            .indexed_iter()
-            .map(|(i, v)| (v - preds[i]).powi(2).div(y_test.len() as f64))
-            .sum();
-        println! {"Base error: {:?}, Training Error: {:?}, Test Error: {:?}", base_err, fit_result.err, test_err};
-
-        assert!(
-            fit_result.err < base_err,
-            "Error is not less than mean error"
-        );
-    }
-
-    #[test]
-    fn test_mpf_predict() {
-        let (x, y) = setup_data_csv();
-        let (fit_result, mpf) = fit_grown(
-            x.view(),
-            y.view(),
-            MPFParams {
-                n_families: 100,
-                n_iter: 100,
-                m_try: 1.0,
-                split_try: 10,
-                seed: 42,
-            },
-        );
-        let pred = mpf.predict(x.view());
-        let diff = fit_result.y_hat - pred;
-        assert!(diff.iter().all(|&x| x < 1e-6));
     }
 
     #[test]

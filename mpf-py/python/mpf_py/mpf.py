@@ -1,9 +1,6 @@
-
 import numpy as np
 from mpf_py._mpf_py import TreeGrid as _TreeGrid
 from mpf_py._mpf_py import MPFBagged as _MPFBagged
-from mpf_py._mpf_py import MPFGrown as _MPFGrown
-
 from mpf_py._mpf_py import FitResult
 from mpf_py.wrapper import PythonWrapperClassBase
 
@@ -102,29 +99,6 @@ class MPF:
             return self._rust_instance.predict(x)
 
 
-    class Grown(PythonWrapperClassBase, RustClass=_MPFGrown):
-        def __init__(self, mpf_grown):
-            super().__init__()
-            self._rust_instance = mpf_grown
-        
-        @classmethod
-        def fit(
-            cls, 
-            x: np.typing.NDArray[np.float64], 
-            y: np.typing.NDArray[np.float64],
-            n_iter: int,
-            split_try: int, 
-            colsample_bytree: float,
-            seed: int = 42
-        ) -> tuple["MPF.Grown", "FitResult"]:
-            mpf_grown, fr = _MPFGrown.fit(x, y, n_iter, split_try, colsample_bytree, seed)
-            instance = cls(mpf_grown)
-            instance._tree_grid_families_lst = [[TreeGrid(tg) for tg in tf.tree_grids] for tf in instance.tree_grid_families]
-            return instance, fr
-
-        def predict(self, x: np.typing.NDArray[np.float64]) -> np.typing.NDArray[np.float64]:
-            return self._rust_instance.predict(x)
-
     def __init__(self, mpf):
         self._mpf = mpf
         self.variant = self._mpf.__class__.__name__
@@ -142,12 +116,4 @@ class MPF:
     ) -> tuple["MPF.Bagged", "FitResult"]:
         mpf_bagged, fr = cls.Bagged.fit(*args, **kwargs)
         return cls.Bagged(mpf_bagged), fr
-    
-    @classmethod
-    def fit_grown(
-        cls, 
-        *args, **kwargs
-    ) -> tuple["MPF.Grown", "FitResult"]:
-        mpf_grown, fr = cls.Grown.fit(*args, **kwargs)
-        return cls.Grown(mpf_grown), fr
     

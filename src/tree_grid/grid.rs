@@ -1,6 +1,5 @@
 use fitter::TreeGridFitter;
 use ndarray::{Array1, ArrayView2, Axis};
-use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::FittedModel;
 
