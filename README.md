@@ -2,7 +2,16 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-MPF is a supervised learning algorithm that models using sums of products of univariate functions. This approach provides a different way to model decision boundaries compared to traditional decision trees, offering potentially better interpretability while maintaining predictive performance.
+
+**MPF** is a machine learning library for Python (written in Rust) that implements an interpretable machine learning model by fitting sums of multiplicative (separable) structures. It tries to learn a regression model $\hat{m}(x_1, \dots, x_p)$ as a sum of rank‑1, separable components:
+  
+$$
+\hat{m}(x_1, \dots, x_p) \approx \sum_{k=1}^{K} \lambda_k \prod_{j=1}^{p} \hat{m}_{j,k}(x_j)
+$$
+
+where each $\hat{m}_{j,k}(x_j)$ is a univariate function capturing the effect of variable $x_j$ in the $k$'th component $\lambda_k$ is a scaling factor for the $k$th component.
+
+This structure naturally decomposes the function into interpretable main effects and interactions.
 
 ## Key Features
 
@@ -55,15 +64,15 @@ y = 2*X[:,1] + X[:,0] - 0.5 * X[:,0]* X[:,1] + 34
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # Fit MPF Boosted model with reproducible results
-model, fit_result = MPF.Boosted.fit(
+model, fit_result = MPF.fit_boosted(
     X_train, y_train,
-    epochs=5,
-    B=100,
-    n_iter=100,
-    split_try=10,
+    epochs=3,
+    B=1,
+    n_iter=260,
+    split_try=20,
     colsample_bytree=1.0,
     identified=True,
-    seed=42  # Set seed for reproducibility
+    seed=1  # Set seed for reproducibility
 )
 
 # Make predictions
@@ -72,12 +81,13 @@ test_error = np.mean((y_test - predictions) ** 2)
 print(f"Test MSE: {test_error}")
 
 # Access and visualize model components
-tree_grid_families = model.get_tree_grid_families()
+tree_grid_families = model.tree_grid_families
 for family in tree_grid_families:
     # Get individual tree grids
-    tree_grids = family.get_tree_grids()
+    tree_grids = family.tree_grids
     for grid in tree_grids:
         # Plot component functions for each dimension
+        grid = TreeGrid(grid)
         grid.plot_components()
         
         # Visualize grid predictions
@@ -86,6 +96,7 @@ for family in tree_grid_families:
             lambda x: grid.predict(x), 
             title=f"Tree Grid (scaling: {grid.scaling})"
         )
+
 ```
 
 ### Rust Example
@@ -125,8 +136,8 @@ fn main() {
 
 ```
 MPF/
-├── src/                  # Core Rust implementation
-│   ├── forest/          # MPF algorithm implementation
+├── src/                # Core Rust implementation
+│   ├── forest/         # MPF algorithm implementation
 │   │   ├── forest_fitter.rs  # Main fitting algorithms
 │   │   └── mpf.rs      # MPF model definition
 │   ├── tree_grid/      # Tree grid implementation
@@ -144,8 +155,8 @@ MPF/
 
 ### Python API
 
-#### MPF.Boosted
-- `fit(X, y, epochs, B, n_iter, split_try, colsample_bytree, identified, seed)`: Fit model to data
+#### MPF
+- `fit_boosted(X, y, epochs, B, n_iter, split_try, colsample_bytree, identified, seed)`: Fit model to data
 - `predict(X)`: Make predictions
 - `get_tree_grid_families()`: Access internal tree grid families
 
@@ -157,17 +168,11 @@ MPF/
 
 #### Main Functions
 - `fit_boosted()`: Fit MPF model with bagging
-- `fit_grown()`: Fit MPF model with growing
-- `fit_averaged()`: Fit MPF model with averaging
 
 #### Types
 - `MPFBoostedParams`: Parameters for boosted MPF
 - `TreeGridFamilyBoostedParams`: Parameters for boosted tree grid family
 - `TreeGridParams`: Base tree grid parameters
-
-## Contributing
-
-We welcome contributions! Please see our [contribution guidelines](CONTRIBUTING.md) for details.
 
 ## License
 
