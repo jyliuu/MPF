@@ -16,10 +16,7 @@ use mpf::{
             grown::GrownVariant,
             TreeGridFamily,
         },
-        grid::{
-            fitter::{TreeGridFitter, TreeGridParams},
-            FittedTreeGrid,
-        },
+        grid::{self, fitter::TreeGridParams, FittedTreeGrid},
     },
     FitResult, FittedModel, ModelFitter,
 };
@@ -94,6 +91,17 @@ impl TreeGridFamilyBaggedPy {
     pub fn get_combined_tree_grid(&self, py: Python<'_>) -> PyResult<TreeGridPy> {
         let combined_tree_grid = self.0.combine_into_single_tree_grid();
         Ok(TreeGridPy::from(combined_tree_grid))
+    }
+
+    #[getter]
+    pub fn get_aligned_tree_grids<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let aligned_tree_grids = self.0.get_aligned_tree_grids();
+        let aligned_tree_grids_py: Vec<TreeGridPy> = aligned_tree_grids
+            .iter()
+            .map(|tg| TreeGridPy::from(tg.clone()))
+            .collect();
+
+        PyList::new(py, aligned_tree_grids_py)
     }
 
     #[pyo3(name = "predict")]
@@ -181,7 +189,7 @@ impl MPFBaggedPy {
                 },
             },
         };
-        let (fit_result, mpf) = fit_bagged(x, y, params);
+        let (fit_result, mpf) = fit_bagged(x, y, &params);
         Ok((mpf.into(), FitResultPy::from(fit_result)))
     }
 }
@@ -244,6 +252,11 @@ impl MPFGrownPy {
 #[pymethods]
 impl TreeGridPy {
     #[getter]
+    pub fn get_scaling(&self) -> f64 {
+        self.scaling
+    }
+
+    #[getter]
     pub fn get_splits<'py>(&'py self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         // Convert the reference to a PyList
         PyList::new(py, &self.splits)
@@ -291,8 +304,7 @@ impl TreeGridPy {
             colsample_bytree,
             identified,
         };
-        let tg_fitter = TreeGridFitter::new(x.view(), y.view());
-        let (fit_result, tg) = tg_fitter.fit(&params);
+        let (fit_result, tg) = grid::fitter::fit(x.view(), y.view(), &params);
         Ok((tg.into(), FitResultPy::from(fit_result)))
     }
 }

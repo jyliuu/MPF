@@ -22,9 +22,10 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
         y: np.typing.NDArray[np.float64],
         n_iter: int,
         split_try: int, 
-        colsample_bytree: float
+        colsample_bytree: float,
+        identified: bool = True,
     ) -> tuple["TreeGrid", "FitResult"]:
-        tg, fr = _TreeGrid.fit(x, y, n_iter, split_try, colsample_bytree)
+        tg, fr = _TreeGrid.fit(x, y, n_iter, split_try, colsample_bytree, identified)
         return cls(tg), fr
 
 
@@ -37,9 +38,7 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
 
         return [*zip(intervals, values)]
 
-    def plot(self, axis: int):
-
-        component = self.get_component(axis)
+    def plot_components(self):
         try: 
             import matplotlib.pyplot as plt
         except ImportError:
@@ -47,27 +46,32 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
                 "Matplotlib is required to use the 'plot' function. "
                 "Please install it using: pip install matplotlib"
             )
-    
+
         plt.figure(figsize=(10, 6))
+        # Define a list of high contrast colors
+        colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown']
 
-        # Iterate through the intervals and corresponding values
-        for (x_start, x_end), y in component:
-            # Handle infinity
-            if x_start == -np.inf:
-                x_start = x_end - 2 
-            if x_end == np.inf:
-                x_end = x_start + 2
+        # For each axis, plot its intervals using a dedicated high contrast color
+        for axis_idx, (intervals, values) in enumerate(zip(self.intervals, self.grid_values)):
+            color = colors[axis_idx % len(colors)]
+            for (x_start, x_end), y in zip(intervals, values):
+            # Replace -infinity and +infinity if necessary:
+                if x_start == -np.inf:
+                    x_start = x_end - np.abs(x_end) * 0.2  # default replacement
+                if x_end == np.inf:
+                    x_end = x_start + np.abs(x_start) * 0.2  # default replacement
+                plt.hlines(y, x_start, x_end, lw=2, color=color,
+                    label=f"Axis {axis_idx}" if y == values[0] else None)
 
-            plt.hlines(y, x_start, x_end, color='b', lw=2)  # Draw horizontal lines
-
-        # Set labels and title
         plt.xlabel('X-axis')
-        plt.ylabel('Values')
-        plt.title(f'Component values on Axis: {axis + 1}')
+        plt.ylabel('Value')
+        plt.title(f'TreeGrid One-Dimensional Components, Scaling: {self.scaling}')
         plt.grid(True)
+        # Only add one legend entry per axis.
+        plt.legend()
+        
         plt.show()
 
-    
 
 class MPF:
 
@@ -85,10 +89,12 @@ class MPF:
             B: int,
             n_iter: int,
             split_try: int, 
-            colsample_bytree: float
+            colsample_bytree: float,
+            identified: bool = True,
         ) -> tuple["MPF.Bagged", "FitResult"]:
-            mpf_bagged, fr = _MPFBagged.fit(x, y, epochs, B, n_iter, split_try, colsample_bytree)
+            mpf_bagged, fr = _MPFBagged.fit(x, y, epochs, B, n_iter, split_try, colsample_bytree, identified)
             instance = cls(mpf_bagged)
+            instance._tree_grid_families_lst = [[TreeGrid(tg) for tg in tf.tree_grids] for tf in instance.tree_grid_families]
             return instance, fr
 
         def predict(self, x: np.typing.NDArray[np.float64]) -> np.typing.NDArray[np.float64]:
@@ -111,8 +117,11 @@ class MPF:
         ) -> tuple["MPF.Grown", "FitResult"]:
             mpf_grown, fr = _MPFGrown.fit(x, y, n_iter, split_try, colsample_bytree)
             instance = cls(mpf_grown)
+            instance._tree_grid_families_lst = [[TreeGrid(tg) for tg in tf.tree_grids] for tf in instance.tree_grid_families]
             return instance, fr
 
+        def predict(self, x: np.typing.NDArray[np.float64]) -> np.typing.NDArray[np.float64]:
+            return self._rust_instance.predict(x)
 
     def __init__(self, mpf):
         self._mpf = mpf
@@ -130,7 +139,7 @@ class MPF:
         *args, **kwargs
     ) -> tuple["MPF.Bagged", "FitResult"]:
         mpf_bagged, fr = cls.Bagged.fit(*args, **kwargs)
-        return cls(cls.Bagged(mpf_bagged)), fr
+        return cls.Bagged(mpf_bagged), fr
     
     @classmethod
     def fit_grown(
@@ -138,7 +147,5 @@ class MPF:
         *args, **kwargs
     ) -> tuple["MPF.Grown", "FitResult"]:
         mpf_grown, fr = cls.Grown.fit(*args, **kwargs)
-        return cls(cls.Grown(mpf_grown)), fr
+        return cls.Grown(mpf_grown), fr
     
-    def predict(self, x: np.typing.NDArray[np.float64]) -> np.typing.NDArray[np.float64]:
-        return self._mpf.predict(x)
