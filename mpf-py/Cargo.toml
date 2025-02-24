@@ -11,4 +11,5 @@ crate-type = ["cdylib"]
 [dependencies]
 numpy = "0.23"
 pyo3 = { version = "0.23.3", features = ["extension-module"] }
-mpf_rust = { path = "../"}
+mpf_rust = { path = "../", features = ["use-rayon"] }
+rand = "0.8.5"
