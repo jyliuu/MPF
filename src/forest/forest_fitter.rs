@@ -1,4 +1,5 @@
 use ndarray::{Array1, ArrayView1, ArrayView2};
+use rand::{rngs::StdRng, SeedableRng};
 
 use crate::{
     tree_grid::family::{
@@ -63,6 +64,7 @@ pub fn fit_grown(
     y: ArrayView1<f64>,
     hyperparameters: MPFParams,
 ) -> (FitResult, MPF<TreeGridFamily<GrownVariant>>) {
+    let mut rng = StdRng::seed_from_u64(42);
     let MPFParams {
         n_families,
         n_iter,
@@ -80,6 +82,7 @@ pub fn fit_grown(
                 m_try,
                 split_try,
             },
+            &mut rng,
         );
         fitted_tree_grid_families.push(tree_grid_family);
         fit_results.push(tgf_fit_result);
@@ -106,6 +109,7 @@ pub fn fit_bagged(
     y: ArrayView1<f64>,
     hyperparameters: &MPFBaggedParams,
 ) -> (FitResult, MPF<TreeGridFamily<BaggedVariant>>) {
+    let mut rng = StdRng::seed_from_u64(42);
     let MPFBaggedParams { epochs, tgf_params } = hyperparameters;
 
     // Ensure that x_input and y_input have the same lifetime ('c) during this loop.
@@ -113,7 +117,8 @@ pub fn fit_bagged(
     let mut tree_grid_families = Vec::new();
 
     for _ in 0..*epochs {
-        let (fit_result, tree_grid_family) = bagged::fit(x.view(), y_new.view(), tgf_params);
+        let (fit_result, tree_grid_family) =
+            bagged::fit(x.view(), y_new.view(), tgf_params, &mut rng);
         tree_grid_families.push(tree_grid_family);
         y_new = fit_result.residuals;
     }
@@ -132,13 +137,15 @@ pub fn fit_averaged(
     y: ArrayView1<f64>,
     hyperparameters: MPFAveragedParams,
 ) -> (FitResult, MPF<TreeGridFamily<AveragedVariant>>) {
+    let mut rng = StdRng::seed_from_u64(42);
     let MPFAveragedParams { epochs, tgf_params } = hyperparameters;
 
     let mut tree_grid_families = Vec::new();
     let mut residuals = Array1::zeros(y.len());
 
     for _ in 0..epochs {
-        let (fit_result, tree_grid_family) = averaged::fit(x.view(), y.view(), &tgf_params);
+        let (fit_result, tree_grid_family) =
+            averaged::fit(x.view(), y.view(), &tgf_params, &mut rng);
         tree_grid_families.push(tree_grid_family);
         residuals += &fit_result.residuals;
     }

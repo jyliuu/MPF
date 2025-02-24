@@ -2,29 +2,20 @@ use std::vec;
 
 use itertools::Itertools;
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
-use rand::{seq::index::sample, Rng, SeedableRng};
+use rand::{seq::index::sample, Rng};
 
 use crate::{FitResult, ModelFitter};
 
 use super::FittedTreeGrid;
 
-pub fn fit(
+pub fn fit<R: Rng + ?Sized>(
     x: ArrayView2<f64>,
     y: ArrayView1<f64>,
     hyperparameters: &TreeGridParams,
+    rng: &mut R,
 ) -> (FitResult, FittedTreeGrid) {
-    fit_seeded(x, y, hyperparameters, 1)
-}
-
-pub fn fit_seeded(
-    x: ArrayView2<f64>,
-    y: ArrayView1<f64>,
-    hyperparameters: &TreeGridParams,
-    seed: u64,
-) -> (FitResult, FittedTreeGrid) {
-    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     let fitter = TreeGridFitter::new(x.view(), y.view());
-    fitter.fit(hyperparameters, &mut rng)
+    fitter.fit(hyperparameters, rng)
 }
 
 #[derive(Debug)]
@@ -454,7 +445,7 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
         }
     }
 
-    fn fit<R: Rng>(
+    fn fit<R: Rng + ?Sized>(
         mut self,
         hyperparameters: &Self::HyperParameters,
         rng: &mut R,

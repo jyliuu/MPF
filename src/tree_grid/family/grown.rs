@@ -13,10 +13,11 @@ use crate::{
 
 use super::{Aggregation, AggregationMethod, TreeGridFamily};
 
-pub fn fit(
+pub fn fit<R: Rng + ?Sized>(
     x: ArrayView2<f64>,
     y: ArrayView1<f64>,
     hyperparameters: &TreeGridFamilyGrownParams,
+    rng: &mut R,
 ) -> (FitResult, TreeGridFamily<GrownVariant>) {
     let dims = x.shape()[1];
     let intercept_grid = TreeGridFitter::new(x.view(), y.view());
@@ -39,7 +40,6 @@ pub fn fit(
         m_try,
         split_try,
     } = *hyperparameters;
-    let mut rng = rand::thread_rng();
 
     for _ in 0..n_iter {
         let potential_splits = fitter.potential_splits();
@@ -49,7 +49,7 @@ pub fn fit(
         let mut candidates = Vec::new();
         let split_indices: Vec<usize> = (0..n_potential_splits).collect();
         let selected_splits: Vec<usize> = split_indices
-            .choose_multiple(&mut rng, n_splits_to_try)
+            .choose_multiple(rng, n_splits_to_try)
             .copied()
             .collect();
 

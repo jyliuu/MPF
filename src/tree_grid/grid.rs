@@ -1,5 +1,6 @@
 use fitter::TreeGridFitter;
 use ndarray::{Array1, ArrayView2, Axis};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::FittedModel;
 
@@ -136,19 +137,17 @@ impl<'a> From<TreeGridFitter<'a>> for FittedTreeGrid {
 
 #[cfg(test)]
 mod tests {
-
-    use fitter::TreeGridParams;
-
-    use crate::test_data::setup_data_csv;
-
     use super::*;
+    use crate::test_data::setup_data_csv;
+    use fitter::TreeGridParams;
+    use rand::{rngs::StdRng, SeedableRng};
 
     #[test]
     fn test_model_fit() {
         let (x, y) = setup_data_csv();
-
-        let (fit_result, tree_grid) = fitter::fit(x.view(), y.view(), &TreeGridParams::default());
-
+        let mut rng = StdRng::seed_from_u64(42);
+        let hyperparameters = TreeGridParams::default();
+        let (fit_result, _) = fitter::fit(x.view(), y.view(), &hyperparameters, &mut rng);
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();
         println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
@@ -159,49 +158,31 @@ mod tests {
     }
 
     #[test]
-    fn test_model_seeding_works() {
+    fn test_model_predict() {
         let (x, y) = setup_data_csv();
-
+        let mut rng = StdRng::seed_from_u64(42);
         let hyperparameters = TreeGridParams::default();
-        let seed = 42;
-
-        let (fit_result_1, _) = fitter::fit_seeded(x.view(), y.view(), &hyperparameters, seed);
-        let (fit_result_2, _) = fitter::fit_seeded(x.view(), y.view(), &hyperparameters, seed);
-
-        let diff = &fit_result_1.y_hat - &fit_result_2.y_hat;
+        let (fit_result, tg) = fitter::fit(x.view(), y.view(), &hyperparameters, &mut rng);
+        let pred = tg.predict(x.view());
+        let diff = fit_result.y_hat - pred;
         assert!(diff.iter().all(|&x| x < 1e-6));
     }
 
     #[test]
     fn test_model_predict_identified_equals_unidentified() {
         let (x, y) = setup_data_csv();
-
+        let mut rng = StdRng::seed_from_u64(42);
         let mut hyperparameters = TreeGridParams::default();
-        let (_, fit_identified) = fitter::fit(x.view(), y.view(), &hyperparameters);
-
         hyperparameters.identified = false;
+        let (_, tg_unidentified) = fitter::fit(x.view(), y.view(), &hyperparameters, &mut rng);
+        let pred_unidentified = tg_unidentified.predict(x.view());
 
-        let (_, fit_unidentified) = fitter::fit(x.view(), y.view(), &hyperparameters);
+        let mut rng = StdRng::seed_from_u64(42);
+        hyperparameters.identified = true;
+        let (_, tg_identified) = fitter::fit(x.view(), y.view(), &hyperparameters, &mut rng);
+        let pred_identified = tg_identified.predict(x.view());
 
-        println!("Identified scaling: {:?}", fit_identified.scaling);
-        let y_hat_identified = fit_identified.predict(x.view());
-        let y_hat_unidentified = fit_unidentified.predict(x.view());
-
-        let diff = &y_hat_identified - &y_hat_unidentified;
-        println!("diff: {diff:?}");
-
-        assert!(diff.iter().all(|&x| x < 1e-6));
-    }
-
-    #[test]
-    fn test_model_predict() {
-        let (x, y) = setup_data_csv();
-        let (fit_result, tree_grid) = fitter::fit(x.view(), y.view(), &TreeGridParams::default());
-
-        let y_hat = tree_grid.predict(x.view());
-        let diff = &fit_result.y_hat - &y_hat;
-        println!("diff: {diff:?}");
-
-        assert!(diff.iter().all(|&x| x < 1e-6));
+        let diff = pred_identified - pred_unidentified;
+        assert!(diff.iter().all(|&x| x.abs() < 1e-6));
     }
 }

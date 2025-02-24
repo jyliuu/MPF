@@ -1,14 +1,15 @@
-
 use ndarray::{Array1, ArrayView1, ArrayView2};
+use rand::Rng;
 
 use crate::{tree_grid::grid::fitter::TreeGridParams, FitResult, FittedModel};
 
 use super::{bagged, Aggregation, AggregationMethod, TreeGridFamily};
 
-pub fn fit(
+pub fn fit<R: Rng + ?Sized>(
     x: ArrayView2<f64>,
     y: ArrayView1<f64>,
     hyperparameters: &TreeGridFamilyAveragedParams,
+    rng: &mut R,
 ) -> (FitResult, TreeGridFamily<AveragedVariant>) {
     let (fr, tgf) = bagged::fit(
         x,
@@ -17,6 +18,7 @@ pub fn fit(
             B: hyperparameters.B,
             tg_params: hyperparameters.tg_params.clone(),
         },
+        rng,
     );
 
     let tgf = TreeGridFamily(tgf.0, AveragedVariant);

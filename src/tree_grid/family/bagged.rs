@@ -1,5 +1,5 @@
 use ndarray::{Array1, ArrayView1, ArrayView2};
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 
 use crate::{
     tree_grid::grid::{
@@ -13,41 +13,49 @@ use super::{Aggregation, AggregationMethod, FittedTreeGrid, TreeGridFamily};
 #[cfg(feature = "use-rayon")]
 use rayon::prelude::*;
 
-pub fn fit(
+pub fn fit<R: Rng + ?Sized>(
     x: ArrayView2<f64>,
     y: ArrayView1<f64>,
     hyperparameters: &TreeGridFamilyBaggedParams,
+    rng: &mut R,
 ) -> (FitResult, TreeGridFamily<BaggedVariant>) {
     let TreeGridFamilyBaggedParams { B, tg_params } = hyperparameters;
-    let tree_grids_iter;
     let n = x.nrows();
 
-    #[cfg(not(feature = "use-rayon"))]
-    {
-        tree_grids_iter = 0..*B
-    }
-    #[cfg(feature = "use-rayon")]
-    {
-        tree_grids_iter = (0..*B).into_par_iter()
-    }
+    // Pre-generate seeds for each thread
+    let seeds: Vec<u64> = (0..*B).map(|_| rng.gen()).collect();
 
-    let tree_grids: Vec<FittedTreeGrid> = tree_grids_iter
-        .map(|b| {
-            // Common sampling code without shifting.
-            let mut rng = rand::thread_rng();
-            let sample_indices: Vec<usize> = (0..n).map(|_| rng.gen_range(0..n)).collect();
+    #[cfg(not(feature = "use-rayon"))]
+    let tree_grids: Vec<FittedTreeGrid> = seeds
+        .iter()
+        .map(|&seed| {
+            let mut thread_rng = rand::rngs::StdRng::seed_from_u64(seed);
+            let sample_indices: Vec<usize> = (0..n).map(|_| thread_rng.gen_range(0..n)).collect();
             let x_sample = x.select(ndarray::Axis(0), &sample_indices);
             let y_sample = y.select(ndarray::Axis(0), &sample_indices);
+            let (fit_res, tg) =
+                grid::fitter::fit(x_sample.view(), y_sample.view(), tg_params, &mut thread_rng);
+            println!("err: {:?}", fit_res.err);
+            tg
+        })
+        .collect();
 
-            let (fit_res, tg): (FitResult, FittedTreeGrid) =
-                grid::fitter::fit(x_sample.view(), y_sample.view(), tg_params);
-            println!("b: {:?}, err: {:?}", b, fit_res.err);
+    #[cfg(feature = "use-rayon")]
+    let tree_grids: Vec<FittedTreeGrid> = seeds
+        .into_par_iter()
+        .map(|seed| {
+            let mut thread_rng = rand::rngs::StdRng::seed_from_u64(seed);
+            let sample_indices: Vec<usize> = (0..n).map(|_| thread_rng.gen_range(0..n)).collect();
+            let x_sample = x.select(ndarray::Axis(0), &sample_indices);
+            let y_sample = y.select(ndarray::Axis(0), &sample_indices);
+            let (fit_res, tg) =
+                grid::fitter::fit(x_sample.view(), y_sample.view(), tg_params, &mut thread_rng);
+            println!("err: {:?}", fit_res.err);
             tg
         })
         .collect();
 
     let tgf = TreeGridFamily(tree_grids, BaggedVariant);
-
     let preds = tgf.predict(x);
     let residuals = &y - &preds;
     let err = residuals.pow2().mean().unwrap();
@@ -154,54 +162,63 @@ impl TreeGridFamily<BaggedVariant> {
         let mut combined_intervals: Vec<Vec<(f64, f64)>> = Vec::with_capacity(num_axes);
         let mut combined_grid_values: Vec<Vec<f64>> = Vec::with_capacity(num_axes);
 
-        let scalings = grids.iter().map(|grid| grid.scaling).collect::<Vec<f64>>();
+        let scalings: Vec<f64> = grids.iter().map(|grid| grid.scaling).collect();
+        let combined_scaling = scalings.iter().sum::<f64>() / scalings.len() as f64;
+
         // Process each axis separately.
         for axis in 0..num_axes {
+            // Collect and deduplicate splits
             let mut splits: Vec<f64> = grids
                 .iter()
-                .flat_map(|grid| grid.splits[axis].clone())
+                .flat_map(|grid| grid.splits[axis].iter().copied()) // Avoid cloning, just copy f64
                 .collect();
 
-            // Sort the endpoints and remove duplicates (allowing for floating-point tolerance).
             splits.sort_by(|a, b| a.partial_cmp(b).unwrap());
             splits.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
 
-            // Create new (refined) intervals from consecutive endpoints.
+            // Create new intervals
             let mut new_intervals: Vec<(f64, f64)> = Vec::new();
-            new_intervals.push((f64::NEG_INFINITY, splits[0]));
-            for i in 0..splits.len() - 1 {
-                new_intervals.push((splits[i], splits[i + 1]));
+            if splits.is_empty() {
+                new_intervals.push((f64::NEG_INFINITY, f64::INFINITY));
+            } else {
+                new_intervals.push((f64::NEG_INFINITY, splits[0]));
+                for i in 0..splits.len() - 1 {
+                    new_intervals.push((splits[i], splits[i + 1]));
+                }
+                new_intervals.push((splits[splits.len() - 1], f64::INFINITY));
             }
-            new_intervals.push((splits[splits.len() - 1], f64::INFINITY));
+            combined_intervals.push(new_intervals.clone()); // Store intervals for later use
 
-            // For each new interval, combine the grid values from all treegrids.
-            let mut new_grid_values: Vec<f64> = Vec::new();
+            // Prepare to collect combined grid values for this axis
+            let mut new_grid_values: Vec<f64> = Vec::with_capacity(new_intervals.len());
+
+            // For each new interval, combine grid values from all treegrids
             for &(a, b) in &new_intervals {
-                let mut values: Vec<f64> = Vec::new();
-                // For each treegrid, find the grid value for which [a,b) is contained in its interval.
-                for (idx, grid) in grids.iter().enumerate() {
-                    let mut found_value = None;
-                    for (i, &(ia, ib)) in grid.intervals[axis].iter().enumerate() {
+                let mut values: Vec<f64> = Vec::with_capacity(grids.len());
+                for (grid_index, grid) in grids.iter().enumerate() {
+                    // Efficiently find the grid value for the interval [a, b)
+                    for (interval_index, &(ia, ib)) in grid.intervals[axis].iter().enumerate() {
                         if a >= ia && b <= ib {
-                            found_value = Some(grid.grid_values[axis][i]);
-                            break;
+                            values.push(
+                                aligned_signs[grid_index][axis]
+                                    * grid.grid_values[axis][interval_index],
+                            );
+                            break; // Move to the next grid after finding a value
                         }
                     }
-                    if let Some(val) = found_value {
-                        values.push(aligned_signs[idx][axis] * val);
-                    }
                 }
-                // Combine these values by taking simple average
-
-                let combined_val = values.iter().sum::<f64>() / values.len() as f64;
+                // Combine values by taking simple average (handle empty values case)
+                let combined_val = if values.is_empty() {
+                    0.0 // Or handle as NaN, or based on domain knowledge
+                } else {
+                    values.iter().sum::<f64>() / values.len() as f64
+                };
                 new_grid_values.push(combined_val);
             }
-            combined_intervals.push(new_intervals);
-            combined_splits.push(splits);
             combined_grid_values.push(new_grid_values);
+            combined_splits.push(splits);
         }
 
-        let combined_scaling = scalings.iter().sum::<f64>() / scalings.len() as f64;
         FittedTreeGrid {
             splits: combined_splits,
             intervals: combined_intervals,
