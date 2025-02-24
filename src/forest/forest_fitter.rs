@@ -104,7 +104,7 @@ pub fn fit_grown(
 pub fn fit_bagged(
     x: ArrayView2<f64>,
     y: ArrayView1<f64>,
-    hyperparameters: MPFBaggedParams,
+    hyperparameters: &MPFBaggedParams,
 ) -> (FitResult, MPF<TreeGridFamily<BaggedVariant>>) {
     let MPFBaggedParams { epochs, tgf_params } = hyperparameters;
 
@@ -112,8 +112,8 @@ pub fn fit_bagged(
     let mut y_new = y.to_owned();
     let mut tree_grid_families = Vec::new();
 
-    for _ in 0..epochs {
-        let (fit_result, tree_grid_family) = bagged::fit(x.view(), y_new.view(), &tgf_params);
+    for _ in 0..*epochs {
+        let (fit_result, tree_grid_family) = bagged::fit(x.view(), y_new.view(), tgf_params);
         tree_grid_families.push(tree_grid_family);
         y_new = fit_result.residuals;
     }
@@ -218,7 +218,7 @@ mod tests {
         let x_test = x.slice(s![n / 2.., ..]);
         let y_test = y.slice(s![n / 2..]);
 
-        let (fit_result, mpf) = fit_bagged(x_train, y_train, MPFBaggedParams::default());
+        let (fit_result, mpf) = fit_bagged(x_train, y_train, &MPFBaggedParams::default());
         let mean = y_test.mean().unwrap();
         let base_err = y_test.view().map(|v| v - mean).powi(2).mean().unwrap();
         let preds = mpf.predict(x_test.view());

@@ -39,7 +39,7 @@ fn main() {
         },
     };
 
-    let (fr, model) = fit_bagged(x_train.view(), y_train.view(), params);
+    let (fr, model) = fit_bagged(x_train.view(), y_train.view(), &params);
     let elapsed = start.elapsed().unwrap();
     println!("Time elapsed: {:?}", elapsed);
 
