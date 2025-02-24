@@ -9,12 +9,12 @@ def generate_test_data(n_samples=100, n_features=2, random_state=42):
     y = np.sum(X ** 2, axis=1) + rng.randn(n_samples) * 0.1
     return X, y
 
-def test_mpf_bagged_reproducibility():
-    """Test that MPFBagged with same seed produces identical predictions."""
+def test_mpf_boosted_reproducibility():
+    """Test that MPFBoosted with same seed produces identical predictions."""
     X, y = generate_test_data()
     
     # Train first model
-    model1, _ = MPF.Bagged.fit(
+    model1, _ = MPF.Boosted.fit(
         X, y,
         epochs=2,
         B=5,
@@ -26,7 +26,7 @@ def test_mpf_bagged_reproducibility():
     )
     
     # Train second model with same parameters and seed
-    model2, _ = MPF.Bagged.fit(
+    model2, _ = MPF.Boosted.fit(
         X, y,
         epochs=2,
         B=5,
@@ -51,7 +51,7 @@ def test_different_seeds_produce_different_results():
     X, y = generate_test_data()
     
     # Train models with different seeds
-    model1, _ = MPF.Bagged.fit(
+    model1, _ = MPF.Boosted.fit(
         X, y,
         epochs=2,
         B=5,
@@ -62,7 +62,7 @@ def test_different_seeds_produce_different_results():
         seed=42
     )
     
-    model2, _ = MPF.Bagged.fit(
+    model2, _ = MPF.Boosted.fit(
         X, y,
         epochs=2,
         B=5,

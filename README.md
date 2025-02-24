@@ -54,8 +54,8 @@ X = np.random.rand(1000, 2)
 y = 2*X[:,1] + X[:,0] - 0.5 * X[:,0]* X[:,1] + 34
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Fit MPF Bagged model with reproducible results
-model, fit_result = MPF.Bagged.fit(
+# Fit MPF Boosted model with reproducible results
+model, fit_result = MPF.Boosted.fit(
     X_train, y_train,
     epochs=5,
     B=100,
@@ -100,9 +100,9 @@ fn main() {
     let y: Array1<f64> = /* your targets */;
 
     // Fit MPF model with reproducible results
-    let params = MPFBaggedParams {
+    let params = MPFBoostedParams {
         epochs: 5,
-        tgf_params: TreeGridFamilyBaggedParams {
+        tgf_params: TreeGridFamilyBoostedParams {
             B: 100,
             tg_params: TreeGridParams {
                 n_iter: 100,
@@ -114,7 +114,7 @@ fn main() {
         seed: 42,  // Set seed for reproducibility
     };
     
-    let (fit_result, model) = fit_bagged(x.view(), y.view(), &params);
+    let (fit_result, model) = fit_boosted(x.view(), y.view(), &params);
 
     // Make predictions
     let predictions = model.predict(x.view());
@@ -144,7 +144,7 @@ MPF/
 
 ### Python API
 
-#### MPF.Bagged
+#### MPF.Boosted
 - `fit(X, y, epochs, B, n_iter, split_try, colsample_bytree, identified, seed)`: Fit model to data
 - `predict(X)`: Make predictions
 - `get_tree_grid_families()`: Access internal tree grid families
@@ -156,13 +156,13 @@ MPF/
 ### Rust API
 
 #### Main Functions
-- `fit_bagged()`: Fit MPF model with bagging
+- `fit_boosted()`: Fit MPF model with bagging
 - `fit_grown()`: Fit MPF model with growing
 - `fit_averaged()`: Fit MPF model with averaging
 
 #### Types
-- `MPFBaggedParams`: Parameters for bagged MPF
-- `TreeGridFamilyBaggedParams`: Parameters for bagged tree grid family
+- `MPFBoostedParams`: Parameters for boosted MPF
+- `TreeGridFamilyBoostedParams`: Parameters for boosted tree grid family
 - `TreeGridParams`: Base tree grid parameters
 
 ## Contributing

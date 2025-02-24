@@ -47,12 +47,12 @@ def test_tree_grid_fit(training_data, test_data):
     assert tg_test_loss < mean_test_loss, "Tree grid should beat the mean predictor"
 
 
-def test_mpf_bagged_fit(training_data, test_data):
+def test_mpf_boosted_fit(training_data, test_data):
     X, y = training_data
     X_test, y_test = test_data
 
     # Train the MPF estimator
-    mpf, fr = MPF.Bagged.fit(X, y, epochs=3, B=37, n_iter=30, split_try=16, colsample_bytree=1.0, identified=True)
+    mpf, fr = MPF.Boosted.fit(X, y, epochs=3, B=37, n_iter=30, split_try=16, colsample_bytree=1.0, identified=True)
 
     print("Fit result: ", fr)
     # MPF predictions and loss

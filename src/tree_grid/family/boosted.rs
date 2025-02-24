@@ -16,10 +16,10 @@ use rayon::prelude::*;
 pub fn fit<R: Rng + ?Sized>(
     x: ArrayView2<f64>,
     y: ArrayView1<f64>,
-    hyperparameters: &TreeGridFamilyBaggedParams,
+    hyperparameters: &TreeGridFamilyBoostedParams,
     rng: &mut R,
-) -> (FitResult, TreeGridFamily<BaggedVariant>) {
-    let TreeGridFamilyBaggedParams { B, tg_params } = hyperparameters;
+) -> (FitResult, TreeGridFamily<BoostedVariant>) {
+    let TreeGridFamilyBoostedParams { B, tg_params } = hyperparameters;
     let n = x.nrows();
 
     // Pre-generate seeds for each thread
@@ -55,7 +55,7 @@ pub fn fit<R: Rng + ?Sized>(
         })
         .collect();
 
-    let tgf = TreeGridFamily(tree_grids, BaggedVariant);
+    let tgf = TreeGridFamily(tree_grids, BoostedVariant);
     let preds = tgf.predict(x);
     let residuals = &y - &preds;
     let err = residuals.pow2().mean().unwrap();
@@ -71,9 +71,9 @@ pub fn fit<R: Rng + ?Sized>(
 }
 
 #[derive(Debug, Clone)]
-pub struct BaggedVariant;
+pub struct BoostedVariant;
 
-impl AggregationMethod for BaggedVariant {
+impl AggregationMethod for BoostedVariant {
     const AGGREGATION_METHOD: Aggregation = Aggregation::Sum;
 }
 
@@ -98,7 +98,7 @@ fn geometric_mean(values: &[f64]) -> f64 {
     }
 }
 
-impl TreeGridFamily<BaggedVariant> {
+impl TreeGridFamily<BoostedVariant> {
     fn predict_majority_voted_sign(&self, x: ArrayView2<f64>) -> Array1<f64> {
         let mut result = Array1::ones(x.shape()[0]);
         let mut signs = Array1::from_elem(x.shape()[0], 0.0);
@@ -228,21 +228,21 @@ impl TreeGridFamily<BaggedVariant> {
     }
 }
 
-impl FittedModel for TreeGridFamily<BaggedVariant> {
+impl FittedModel for TreeGridFamily<BoostedVariant> {
     fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
         self.predict_majority_voted_sign(x)
     }
 }
 
 #[derive(Debug)]
-pub struct TreeGridFamilyBaggedParams {
+pub struct TreeGridFamilyBoostedParams {
     pub B: usize,
     pub tg_params: TreeGridParams,
 }
 
-impl Default for TreeGridFamilyBaggedParams {
+impl Default for TreeGridFamilyBoostedParams {
     fn default() -> Self {
-        TreeGridFamilyBaggedParams {
+        TreeGridFamilyBoostedParams {
             B: 100,
             tg_params: TreeGridParams::default(),
         }
@@ -255,25 +255,25 @@ mod tests {
     use ndarray::Array1;
 
     use crate::{
-        forest::forest_fitter::{fit_bagged, MPFBaggedParams},
+        forest::forest_fitter::{fit_boosted, MPFBoostedParams},
         test_data::setup_data_csv,
         tree_grid::grid::{fitter::TreeGridParams, FittedTreeGrid},
         FittedModel,
     };
 
-    use super::TreeGridFamilyBaggedParams;
+    use super::TreeGridFamilyBoostedParams;
 
     #[test]
     fn test_merged_tree_grids_predicts_the_same() {
         let (x, y) = setup_data_csv();
 
-        let (fit_result, mpf) = fit_bagged(
+        let (fit_result, mpf) = fit_boosted(
             x.view(),
             y.view(),
-            &MPFBaggedParams {
+            &MPFBoostedParams {
                 epochs: 2,
                 seed: 42,
-                tgf_params: TreeGridFamilyBaggedParams {
+                tgf_params: TreeGridFamilyBoostedParams {
                     B: 20,
                     tg_params: TreeGridParams {
                         n_iter: 10,

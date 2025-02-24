@@ -1,5 +1,5 @@
 use super::grid::FittedTreeGrid;
-pub mod bagged;
+pub mod boosted;
 
 #[derive(Debug, Clone)]
 pub struct TreeGridFamily<T>(Vec<FittedTreeGrid>, T);
@@ -22,17 +22,17 @@ impl<T> TreeGridFamily<T> {
 #[cfg(test)]
 mod tests {
     use crate::test_data::setup_data_csv;
-    use bagged::TreeGridFamilyBaggedParams;
+    use boosted::TreeGridFamilyBoostedParams;
     use rand::{rngs::StdRng, SeedableRng};
 
     use super::*;
 
     #[test]
-    fn test_tgf_bagged_fit() {
+    fn test_tgf_boosted_fit() {
         let (x, y) = setup_data_csv();
         let mut rng = StdRng::seed_from_u64(42);
-        let hyperparameters = TreeGridFamilyBaggedParams::default();
-        let (fit_result, _) = bagged::fit(x.view(), y.view(), &hyperparameters, &mut rng);
+        let hyperparameters = TreeGridFamilyBoostedParams::default();
+        let (fit_result, _) = boosted::fit(x.view(), y.view(), &hyperparameters, &mut rng);
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();
         println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);

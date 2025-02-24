@@ -8,12 +8,12 @@ use numpy::{PyArray1, ToPyArray};
 
 use mpf::{
     forest::{
-        forest_fitter::{fit_bagged, MPFBaggedParams},
+        forest_fitter::{fit_boosted, MPFBoostedParams},
         mpf::MPF,
     },
     tree_grid::{
         family::{
-            bagged::{BaggedVariant, TreeGridFamilyBaggedParams},
+            boosted::{BoostedVariant, TreeGridFamilyBoostedParams},
             TreeGridFamily,
         },
         grid::{self, fitter::TreeGridParams, FittedTreeGrid},
@@ -70,11 +70,11 @@ impl From<FitResult> for FitResultPy {
 }
 
 #[derive(Debug)]
-#[pyclass(name = "TreeGridFamilyBagged")]
-pub struct TreeGridFamilyBaggedPy(TreeGridFamily<BaggedVariant>);
+#[pyclass(name = "TreeGridFamilyBoosted")]
+pub struct TreeGridFamilyBoostedPy(TreeGridFamily<BoostedVariant>);
 
 #[pymethods]
-impl TreeGridFamilyBaggedPy {
+impl TreeGridFamilyBoostedPy {
     #[getter]
     pub fn get_tree_grids<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         let tree_grids_py: Vec<TreeGridPy> = self
@@ -117,24 +117,24 @@ impl TreeGridFamilyBaggedPy {
 }
 
 #[derive(Debug)]
-#[pyclass(name = "MPFBagged")]
-pub struct MPFBaggedPy(MPF<TreeGridFamily<BaggedVariant>>);
+#[pyclass(name = "MPFBoosted")]
+pub struct MPFBoostedPy(MPF<TreeGridFamily<BoostedVariant>>);
 
-impl From<MPF<TreeGridFamily<BaggedVariant>>> for MPFBaggedPy {
-    fn from(mpf: MPF<TreeGridFamily<BaggedVariant>>) -> Self {
-        MPFBaggedPy(mpf)
+impl From<MPF<TreeGridFamily<BoostedVariant>>> for MPFBoostedPy {
+    fn from(mpf: MPF<TreeGridFamily<BoostedVariant>>) -> Self {
+        MPFBoostedPy(mpf)
     }
 }
 
 #[pymethods]
-impl MPFBaggedPy {
+impl MPFBoostedPy {
     #[getter]
     pub fn get_tree_grid_families<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let tree_grid_families_py: Vec<TreeGridFamilyBaggedPy> = self
+        let tree_grid_families_py: Vec<TreeGridFamilyBoostedPy> = self
             .0
             .get_tree_grid_families()
             .iter()
-            .map(|tgf: &TreeGridFamily<BaggedVariant>| TreeGridFamilyBaggedPy(tgf.clone()))
+            .map(|tgf: &TreeGridFamily<BoostedVariant>| TreeGridFamilyBoostedPy(tgf.clone()))
             .collect();
 
         PyList::new(py, tree_grid_families_py)
@@ -165,12 +165,12 @@ impl MPFBaggedPy {
         colsample_bytree: f64,
         identified: bool,
         seed: u64,
-    ) -> PyResult<(MPFBaggedPy, FitResultPy)> {
+    ) -> PyResult<(MPFBoostedPy, FitResultPy)> {
         let x = x.as_array();
         let y = y.as_array();
-        let params = MPFBaggedParams {
+        let params = MPFBoostedParams {
             epochs,
-            tgf_params: TreeGridFamilyBaggedParams {
+            tgf_params: TreeGridFamilyBoostedParams {
                 B,
                 tg_params: TreeGridParams {
                     n_iter,
@@ -181,7 +181,7 @@ impl MPFBaggedPy {
             },
             seed,
         };
-        let (fit_result, mpf) = fit_bagged(x, y, &params);
+        let (fit_result, mpf) = fit_boosted(x, y, &params);
         Ok((mpf.into(), FitResultPy::from(fit_result)))
     }
 }
@@ -262,7 +262,7 @@ impl FitResultPy {
 fn _mpf_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<TreeGridPy>()?;
     m.add_class::<FitResultPy>()?;
-    m.add_class::<MPFBaggedPy>()?;
+    m.add_class::<MPFBoostedPy>()?;
 
     Ok(())
 }

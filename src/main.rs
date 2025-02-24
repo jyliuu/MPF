@@ -1,8 +1,8 @@
 use std::{ops::Div, time::SystemTime};
 
 use mpf::{
-    forest::forest_fitter::{fit_bagged, MPFBaggedParams},
-    tree_grid::{family::bagged::TreeGridFamilyBaggedParams, grid::fitter::TreeGridParams},
+    forest::forest_fitter::{fit_boosted, MPFBoostedParams},
+    tree_grid::{family::boosted::TreeGridFamilyBoostedParams, grid::fitter::TreeGridParams},
     FittedModel,
 };
 use ndarray::s;
@@ -20,7 +20,7 @@ fn main() {
             .expect("Failed to build global thread pool");
     }
 
-    println!("Running main bagged test");
+    println!("Running main boosted test");
     let (x, y) = test_data::setup_data_csv();
     let n = y.len();
     println!("Fitting and testing on {} samples", n / 2);
@@ -31,16 +31,16 @@ fn main() {
     let y_test = y.slice(s![n / 2..]);
 
     let start = SystemTime::now();
-    let params = MPFBaggedParams {
+    let params = MPFBoostedParams {
         epochs: 50,
-        tgf_params: TreeGridFamilyBaggedParams {
+        tgf_params: TreeGridFamilyBoostedParams {
             B: 10,
             tg_params: TreeGridParams::default(),
         },
         seed: 42,
     };
 
-    let (fr, model) = fit_bagged(x_train.view(), y_train.view(), &params);
+    let (fr, model) = fit_boosted(x_train.view(), y_train.view(), &params);
     let elapsed = start.elapsed().unwrap();
     println!("Time elapsed: {:?}", elapsed);
 

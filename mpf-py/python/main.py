@@ -30,16 +30,16 @@ end_time = time.time()  # End timing for TreeGrid
 print("TreeGrid fitting time: ", end_time - start_time, "seconds")
 
 start_time = time.time()  # Start timing for MPF
-mpf_bagged, mpf_fr = mpf_py.MPFBagged.fit(x_train, y_train, epochs = 10, B = 100, n_iter = 100, split_try = 10, colsample_bytree = 1.0)
+mpf_boosted, mpf_fr = mpf_py.MPFBoosted.fit(x_train, y_train, epochs = 10, B = 100, n_iter = 100, split_try = 10, colsample_bytree = 1.0)
 end_time = time.time()  # End timing for TreeGrid
-print("MPFBagged fitting time: ", end_time - start_time, "seconds")
+print("MPFBoosted fitting time: ", end_time - start_time, "seconds")
 
 xgb_model = xgb.XGBRegressor(objective="reg:squarederror", n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
 xgb_model.fit(x_train, y_train)
 
 xgb_error = np.mean((xgb_model.predict(x_test) - y_test) ** 2)
 tg_error = np.mean((tg.predict(x_test) - y_test) ** 2)
-mpf_error = np.mean((mpf_bagged.predict(x_test) - y_test) ** 2)
+mpf_error = np.mean((mpf_boosted.predict(x_test) - y_test) ** 2)
 baseline_err = np.mean((y_test - np.mean(x_test)) ** 2)
 
 print(f"Mean squared error (TG): {tg_error}, (MPF): {mpf_error}, (XGBoost): {xgb_error}, (Baseline): {baseline_err}")

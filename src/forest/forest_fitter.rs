@@ -3,7 +3,7 @@ use rand::{rngs::StdRng, SeedableRng};
 
 use crate::{
     tree_grid::family::{
-        bagged::{self, BaggedVariant, TreeGridFamilyBaggedParams},
+        boosted::{self, BoostedVariant, TreeGridFamilyBoostedParams},
         TreeGridFamily,
     },
     FitResult,
@@ -11,29 +11,29 @@ use crate::{
 
 use super::mpf::MPF;
 
-pub struct MPFBaggedParams {
+pub struct MPFBoostedParams {
     pub epochs: usize,
-    pub tgf_params: TreeGridFamilyBaggedParams,
+    pub tgf_params: TreeGridFamilyBoostedParams,
     pub seed: u64,
 }
 
-impl Default for MPFBaggedParams {
+impl Default for MPFBoostedParams {
     fn default() -> Self {
-        MPFBaggedParams {
+        MPFBoostedParams {
             epochs: 5,
-            tgf_params: TreeGridFamilyBaggedParams::default(),
+            tgf_params: TreeGridFamilyBoostedParams::default(),
             seed: 42,
         }
     }
 }
 
-pub fn fit_bagged(
+pub fn fit_boosted(
     x: ArrayView2<f64>,
     y: ArrayView1<f64>,
-    hyperparameters: &MPFBaggedParams,
-) -> (FitResult, MPF<TreeGridFamily<BaggedVariant>>) {
+    hyperparameters: &MPFBoostedParams,
+) -> (FitResult, MPF<TreeGridFamily<BoostedVariant>>) {
     let mut rng = StdRng::seed_from_u64(hyperparameters.seed);
-    let MPFBaggedParams {
+    let MPFBoostedParams {
         epochs,
         tgf_params,
         seed: _,
@@ -45,7 +45,7 @@ pub fn fit_bagged(
 
     for _ in 0..*epochs {
         let (fit_result, tree_grid_family) =
-            bagged::fit(x.view(), y_new.view(), tgf_params, &mut rng);
+            boosted::fit(x.view(), y_new.view(), tgf_params, &mut rng);
         tree_grid_families.push(tree_grid_family);
         y_new = fit_result.residuals;
     }
@@ -62,16 +62,16 @@ pub fn fit_bagged(
 #[cfg(test)]
 mod tests {
     use crate::{
-        forest::forest_fitter::{fit_bagged, MPFBaggedParams},
+        forest::forest_fitter::{fit_boosted, MPFBoostedParams},
         test_data::setup_data_csv,
-        tree_grid::{family::bagged::TreeGridFamilyBaggedParams, grid::fitter::TreeGridParams},
+        tree_grid::{family::boosted::TreeGridFamilyBoostedParams, grid::fitter::TreeGridParams},
         FittedModel,
     };
     use ndarray::s;
     use std::ops::Div;
 
     #[test]
-    fn test_mpf_bagged_fit() {
+    fn test_mpf_boosted_fit() {
         let (x, y) = setup_data_csv();
         let n = y.len();
         println!("Fitting and testing on {} samples", n / 2);
@@ -81,12 +81,12 @@ mod tests {
         let x_test = x.slice(s![n / 2.., ..]);
         let y_test = y.slice(s![n / 2..]);
 
-        let params = MPFBaggedParams {
+        let params = MPFBoostedParams {
             epochs: 5,
-            tgf_params: TreeGridFamilyBaggedParams::default(),
+            tgf_params: TreeGridFamilyBoostedParams::default(),
             seed: 42,
         };
-        let (fit_result, mpf) = fit_bagged(x_train, y_train, &params);
+        let (fit_result, mpf) = fit_boosted(x_train, y_train, &params);
         let mean = y_test.mean().unwrap();
         let base_err = y_test.view().map(|v| v - mean).powi(2).mean().unwrap();
         let preds = mpf.predict(x_test.view());
@@ -103,11 +103,11 @@ mod tests {
     }
 
     #[test]
-    fn test_mpf_bagged_reproducibility() {
+    fn test_mpf_boosted_reproducibility() {
         let (x, y) = setup_data_csv();
-        let params = MPFBaggedParams {
+        let params = MPFBoostedParams {
             epochs: 2,
-            tgf_params: TreeGridFamilyBaggedParams {
+            tgf_params: TreeGridFamilyBoostedParams {
                 B: 5,
                 tg_params: TreeGridParams {
                     n_iter: 10,
@@ -120,8 +120,8 @@ mod tests {
         };
 
         // Train two models with the same seed
-        let (_, model1) = fit_bagged(x.view(), y.view(), &params);
-        let (_, model2) = fit_bagged(x.view(), y.view(), &params);
+        let (_, model1) = fit_boosted(x.view(), y.view(), &params);
+        let (_, model2) = fit_boosted(x.view(), y.view(), &params);
 
         // Generate predictions
         let pred1 = model1.predict(x.view());
@@ -136,11 +136,11 @@ mod tests {
     }
 
     #[test]
-    fn test_mpf_bagged_different_seeds() {
+    fn test_mpf_boosted_different_seeds() {
         let (x, y) = setup_data_csv();
-        let base_params = MPFBaggedParams {
+        let base_params = MPFBoostedParams {
             epochs: 2,
-            tgf_params: TreeGridFamilyBaggedParams {
+            tgf_params: TreeGridFamilyBoostedParams {
                 B: 5,
                 tg_params: TreeGridParams {
                     n_iter: 10,
@@ -153,11 +153,11 @@ mod tests {
         };
 
         // Train models with different seeds
-        let (_, model1) = fit_bagged(x.view(), y.view(), &base_params);
+        let (_, model1) = fit_boosted(x.view(), y.view(), &base_params);
 
         let mut params2 = base_params;
         params2.seed = 43;
-        let (_, model2) = fit_bagged(x.view(), y.view(), &params2);
+        let (_, model2) = fit_boosted(x.view(), y.view(), &params2);
 
         // Generate predictions
         let pred1 = model1.predict(x.view());

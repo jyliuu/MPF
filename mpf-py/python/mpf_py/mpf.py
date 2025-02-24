@@ -1,6 +1,6 @@
 import numpy as np
 from mpf_py._mpf_py import TreeGrid as _TreeGrid
-from mpf_py._mpf_py import MPFBagged as _MPFBagged
+from mpf_py._mpf_py import MPFBoosted as _MPFBoosted
 from mpf_py._mpf_py import FitResult
 from mpf_py.wrapper import PythonWrapperClassBase
 
@@ -72,10 +72,10 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
 
 class MPF:
 
-    class Bagged(PythonWrapperClassBase, RustClass=_MPFBagged):
-        def __init__(self, mpf_bagged):
+    class Boosted(PythonWrapperClassBase, RustClass=_MPFBoosted):
+        def __init__(self, mpf_boosted):
             super().__init__()
-            self._rust_instance = mpf_bagged
+            self._rust_instance = mpf_boosted
 
         @classmethod
         def fit(
@@ -89,9 +89,9 @@ class MPF:
             colsample_bytree: float,
             identified: bool = True,
             seed: int = 42
-        ) -> tuple["MPF.Bagged", "FitResult"]:
-            mpf_bagged, fr = _MPFBagged.fit(x, y, epochs, B, n_iter, split_try, colsample_bytree, identified, seed)
-            instance = cls(mpf_bagged)
+        ) -> tuple["MPF.Boosted", "FitResult"]:
+            mpf_boosted, fr = _MPFBoosted.fit(x, y, epochs, B, n_iter, split_try, colsample_bytree, identified, seed)
+            instance = cls(mpf_boosted)
             instance._tree_grid_families_lst = [[TreeGrid(tg) for tg in tf.tree_grids] for tf in instance.tree_grid_families]
             return instance, fr
 
@@ -110,10 +110,10 @@ class MPF:
                 setattr(self, attr, getattr(self._mpf, attr))
 
     @classmethod
-    def fit_bagged(
+    def fit_boosted(
         cls, 
         *args, **kwargs
-    ) -> tuple["MPF.Bagged", "FitResult"]:
-        mpf_bagged, fr = cls.Bagged.fit(*args, **kwargs)
-        return cls.Bagged(mpf_bagged), fr
+    ) -> tuple["MPF.Boosted", "FitResult"]:
+        mpf_boosted, fr = cls.Boosted.fit(*args, **kwargs)
+        return cls.Boosted(mpf_boosted), fr
     
