@@ -42,7 +42,7 @@ pub struct TreeGridParams {
 impl Default for TreeGridParams {
     fn default() -> Self {
         TreeGridParams {
-            n_iter: 50,
+            n_iter: 25,
             split_try: 10,
             colsample_bytree: 1.0,
             identified: true,
@@ -475,7 +475,6 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
             let mut best_err_diff = f64::NEG_INFINITY;
 
             let curr_it_split_idx = &split_idx[iter * split_try..(iter + 1) * split_try];
-
             let curr_it_col_idx = &col_idx[iter * n_cols_to_sample..(iter + 1) * n_cols_to_sample];
 
             for &col in curr_it_col_idx {
@@ -513,8 +512,8 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
         let residuals = self.residuals;
         let y_hat = self.y_hat;
 
-        let mut tree_grid = FittedTreeGrid::new(self.splits, self.intervals, self.grid_values);
-        tree_grid.scaling = self.scaling;
+        let tree_grid =
+            FittedTreeGrid::new(self.splits, self.intervals, self.grid_values, self.scaling);
 
         let fit_res = FitResult {
             err,

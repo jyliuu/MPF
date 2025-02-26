@@ -5,6 +5,80 @@ use crate::FittedModel;
 
 pub mod fitter;
 
+/// A more efficient representation of grid data for a single dimension
+#[derive(Debug, Clone)]
+pub struct DimensionGrid {
+    /// Ordered sequence of split points
+    pub splits: Vec<f64>,
+    /// Values for each interval (length = splits.len() + 1)
+    pub values: Vec<f64>,
+}
+
+impl DimensionGrid {
+    /// Create a new DimensionGrid from splits and values
+    pub fn new(splits: Vec<f64>, values: Vec<f64>) -> Self {
+        assert_eq!(
+            values.len(),
+            splits.len() + 1,
+            "Values length must be one more than splits length"
+        );
+        Self { splits, values }
+    }
+
+    /// Get the intervals represented by this grid
+    pub fn get_intervals(&self) -> Vec<(f64, f64)> {
+        let mut intervals = Vec::with_capacity(self.values.len());
+
+        if self.splits.is_empty() {
+            intervals.push((f64::NEG_INFINITY, f64::INFINITY));
+            return intervals;
+        }
+
+        // First interval: -inf to first split
+        intervals.push((f64::NEG_INFINITY, self.splits[0]));
+
+        // Middle intervals
+        for i in 0..self.splits.len() - 1 {
+            intervals.push((self.splits[i], self.splits[i + 1]));
+        }
+
+        // Last interval: last split to +inf
+        intervals.push((self.splits[self.splits.len() - 1], f64::INFINITY));
+
+        intervals
+    }
+
+    /// Find the interval index containing the given value
+    #[inline]
+    pub fn find_interval_index(&self, value: f64) -> usize {
+        // Handle edge case with no splits
+        if self.splits.is_empty() {
+            return 0;
+        }
+
+        // Modified to ensure proper handling of edge cases by comparing if split <= value
+        // instead of default comparison which would place values exactly equal to splits
+        // in a possibly inconsistent way
+        match self.splits.binary_search_by(|&split| {
+            if split <= value {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Greater
+            }
+        }) {
+            Ok(index) => index + 1, // If equal to a split point, use the next interval
+            Err(index) => index,    // If not found, this is the insertion point
+        }
+    }
+
+    /// Get the value for a given input
+    #[inline]
+    pub fn get_value_for(&self, value: f64) -> f64 {
+        let index = self.find_interval_index(value);
+        self.values[index]
+    }
+}
+
 pub fn compute_inner_product(first: &FittedTreeGrid, second: &FittedTreeGrid, dim: usize) -> f64 {
     let first_splits = &first.splits[dim];
     let first_intervals = &first.intervals[dim];
@@ -88,48 +162,81 @@ pub struct FittedTreeGrid {
     pub intervals: Vec<Vec<(f64, f64)>>,
     pub grid_values: Vec<Vec<f64>>,
     pub scaling: f64,
+    // Add dimension_grids for faster lookups
+    pub dimension_grids: Vec<DimensionGrid>,
 }
 
 impl FittedTreeGrid {
-    pub const fn new(
+    pub fn new(
         splits: Vec<Vec<f64>>,
         intervals: Vec<Vec<(f64, f64)>>,
         grid_values: Vec<Vec<f64>>,
+        scaling: f64,
     ) -> Self {
+        // Create dimension grids for efficient access
+        let dimension_grids = splits
+            .iter()
+            .zip(grid_values.iter())
+            .map(|(split, values)| DimensionGrid::new(split.clone(), values.clone()))
+            .collect();
+
         Self {
             splits,
             intervals,
             grid_values,
-            scaling: 1.0,
+            scaling,
+            dimension_grids,
         }
+    }
+
+    /// Optimized prediction for a single sample
+    #[inline]
+    pub fn predict_single(&self, x: &[f64]) -> f64 {
+        debug_assert_eq!(
+            x.len(),
+            self.dimension_grids.len(),
+            "Input dimension must match tree grid dimension"
+        );
+
+        let mut product = 1.0;
+
+        // Use dimension grid for faster lookups
+        for (i, grid) in self.dimension_grids.iter().enumerate() {
+            product *= grid.get_value_for(x[i]);
+        }
+
+        self.scaling * product
     }
 }
 
 impl FittedModel for FittedTreeGrid {
     fn predict(&self, x: ArrayView2<f64>) -> Array1<f64> {
-        let mut y_hat = Array1::zeros(x.nrows());
+        let n_rows = x.nrows();
+        let mut y_hat = Array1::zeros(n_rows);
+
         for (i, row) in x.axis_iter(Axis(0)).enumerate() {
-            let mut prod = 1.0;
-            for (j, &val) in row.iter().enumerate() {
-                let index = self.splits[j]
-                    .iter()
-                    .position(|&x| val < x)
-                    .unwrap_or(self.splits[j].len());
-                prod *= self.grid_values[j][index];
-            }
-            y_hat[i] = prod;
+            let row_slice = row.as_slice().unwrap();
+            y_hat[i] = self.predict_single(row_slice);
         }
-        self.scaling * y_hat
+        y_hat
     }
 }
 
 impl<'a> From<TreeGridFitter<'a>> for FittedTreeGrid {
     fn from(fitter: TreeGridFitter<'a>) -> Self {
+        let dimension_grids = fitter
+            .splits
+            .iter()
+            .zip(fitter.grid_values.iter())
+            .map(|(split, values)| DimensionGrid::new(split.clone(), values.clone()))
+            .collect();
+
         Self {
             splits: fitter.splits,
             intervals: fitter.intervals,
             grid_values: fitter.grid_values,
             scaling: fitter.scaling,
+            dimension_grids,
         }
     }
 }
