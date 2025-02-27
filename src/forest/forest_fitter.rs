@@ -170,4 +170,33 @@ mod tests {
             "Models with different seeds produced identical predictions"
         );
     }
+
+    #[test]
+    fn test_mpf_housing() {
+        use crate::test_data::setup_data_housing_csv;
+
+        let (x, y) = setup_data_housing_csv();
+
+        let y_mean = y.mean().unwrap();
+        let error = y.view().map(|v| (v - y_mean).powi(2)).mean().unwrap();
+
+        let params = MPFBoostedParams {
+            epochs: 6,
+            tgf_params: TreeGridFamilyBoostedParams {
+                B: 44,
+                tg_params: TreeGridParams {
+                    n_iter: 23,
+                    split_try: 13,
+                    colsample_bytree: 1.0,
+                    identified: true,
+                },
+            },
+            seed: 42,
+        };
+
+        let (fit_result, model) = fit_boosted(x.view(), y.view(), &params);
+        let preds = model.predict(x.view());
+        println!("Error: {:?}", fit_result.err);
+        assert!(fit_result.err < 0.7);
+    }
 }
