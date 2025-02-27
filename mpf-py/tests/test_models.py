@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from mpf_py import TreeGrid, MPF, plot_2d_model_predictions
+from mpf_py import TreeGrid, MPF
 
 def gen_data(n=5000, seed=1):
     np.random.seed(seed)
@@ -41,8 +41,6 @@ def test_tree_grid_fit(training_data, test_data):
     print(f"Mean test loss: {mean_test_loss}")
 
     print(f"Tree grid scaling: {tg.scaling}")
-    tg.plot_components()
-    plot_2d_model_predictions(tg.predict, title="Tree Grid Prediction")
 
     assert tg_test_loss < mean_test_loss, "Tree grid should beat the mean predictor"
 
@@ -66,7 +64,5 @@ def test_mpf_boosted_fit(training_data, test_data):
     # Print losses for debugging (optional)
     print(f"MPF test loss: {mpf_test_loss}")
     print(f"Mean test loss: {mean_test_loss}")
-
-    plot_2d_model_predictions(mpf.predict, title="Tree Grid Prediction")
 
     assert mpf_test_loss < mean_test_loss, "MPF should beat the mean predictor"
