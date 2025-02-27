@@ -32,7 +32,7 @@ jobs:
 
     - name: Build with Maturin
       run: |
-        maturin develop --release
+        pip install .
         
     - name: Run tests
       run: |
