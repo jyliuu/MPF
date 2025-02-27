@@ -21,8 +21,9 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
         split_try: int, 
         colsample_bytree: float,
         identified: bool = True,
+        seed: int = 42
     ) -> tuple["TreeGrid", "FitResult"]:
-        tg, fr = _TreeGrid.fit(x, y, n_iter, split_try, colsample_bytree, identified)
+        tg, fr = _TreeGrid.fit(x, y, n_iter, split_try, colsample_bytree, identified, seed)
         return cls(tg), fr
 
 
@@ -35,7 +36,7 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
 
         return [*zip(intervals, values)]
 
-    def plot_components(self):
+    def plot_components(self, individual_plots: bool = False):
         try: 
             import matplotlib.pyplot as plt
         except ImportError:
@@ -44,30 +45,44 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
                 "Please install it using: pip install matplotlib"
             )
 
-        plt.figure(figsize=(10, 6))
         # Define a list of high contrast colors
         colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown']
 
         # For each axis, plot its intervals using a dedicated high contrast color
         for axis_idx, (intervals, values) in enumerate(zip(self.intervals, self.grid_values)):
+            if individual_plots:
+                plt.figure(figsize=(10, 6))
             color = colors[axis_idx % len(colors)]
             for (x_start, x_end), y in zip(intervals, values):
-            # Replace -infinity and +infinity if necessary:
+                # Replace -infinity and +infinity if necessary:
                 if x_start == -np.inf:
+                    print(f"x_start: {x_start}, x_end: {x_end}")
                     x_start = x_end - np.abs(x_end) * 0.2  # default replacement
-                if x_end == np.inf:
+                    continue
+                elif x_end == np.inf:
+                    print(f"x_start: {x_start}, x_end: {x_end}")
                     x_end = x_start + np.abs(x_start) * 0.2  # default replacement
+                    continue
                 plt.hlines(y, x_start, x_end, lw=2, color=color,
-                    label=f"Axis {axis_idx}" if y == values[0] else None)
+                           label=f"Axis {axis_idx}" if y == values[0] else None)
 
-        plt.xlabel('X-axis')
-        plt.ylabel('Value')
-        plt.title(f'TreeGrid One-Dimensional Components, Scaling: {self.scaling}')
-        plt.grid(True)
-        # Only add one legend entry per axis.
-        plt.legend()
-        
-        plt.show()
+            if individual_plots:
+                plt.xlabel('X-axis')
+                plt.ylabel('Value')
+                plt.title(f'TreeGrid Component for Axis {axis_idx}, Scaling: {self.scaling}')
+                plt.grid(True)
+                plt.legend()
+                plt.show()
+
+        if not individual_plots:
+            plt.figure(figsize=(10, 6))
+            plt.xlabel('X-axis')
+            plt.ylabel('Value')
+            plt.title(f'TreeGrid One-Dimensional Components, Scaling: {self.scaling}')
+            plt.grid(True)
+            plt.legend()
+            plt.show()
+
 
 
 class MPF:
