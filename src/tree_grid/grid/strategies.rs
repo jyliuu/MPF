@@ -1,29 +1,26 @@
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
 use rand::{seq::index::sample, Rng};
 
-use super::params::{CandidateStrategy, SplitStrategy};
+pub trait SplitStrategy {
+    fn sample_splits<R: Rng + ?Sized>(&self, rng: &mut R) -> (Vec<usize>, Vec<usize>);
+}
+#[derive(Debug, Clone)]
+pub struct RandomSplit {
+    pub split_try: usize,
+    pub ncols_to_sample: usize,
+    pub nrows: usize,
+    pub ncols: usize,
+}
 
-pub fn sample_splits<R: Rng + ?Sized>(
-    strategy: &SplitStrategy,
-    rng: &mut R,
-    n_rows: usize,
-    n_cols: usize,
-    n_iter: usize,
-) -> (Vec<usize>, Vec<usize>, usize, usize) {
-    match strategy {
-        SplitStrategy::RandomSplit {
-            split_try,
-            colsample_bytree,
-        } => {
-            let n_cols_to_sample = (colsample_bytree * n_cols as f64) as usize;
-            let split_idx: Vec<usize> = sample(rng, n_rows, split_try * n_iter)
-                .into_iter()
-                .collect();
-            let col_idx: Vec<usize> = (0..n_cols_to_sample * n_iter)
-                .map(|_| rng.gen_range(0..n_cols))
-                .collect();
-            (split_idx, col_idx, *split_try, n_cols_to_sample)
-        }
+impl SplitStrategy for RandomSplit {
+    fn sample_splits<R: Rng + ?Sized>(&self, rng: &mut R) -> (Vec<usize>, Vec<usize>) {
+        let split_idx: Vec<usize> = sample(rng, self.nrows, self.split_try)
+            .into_iter()
+            .collect();
+        let col_idx: Vec<usize> = sample(rng, self.ncols, self.ncols_to_sample)
+            .into_iter()
+            .collect();
+        (split_idx, col_idx)
     }
 }
 
@@ -44,10 +41,7 @@ pub fn get_component_weights(
     leaf_points: &Array2<usize>,
     grid_values: &[Vec<f64>],
 ) -> Vec<Vec<f64>> {
-    let mut weights: Vec<Vec<f64>> = grid_values
-        .iter()
-        .map(|col| vec![0.0; col.len()])
-        .collect();
+    let mut weights: Vec<Vec<f64>> = grid_values.iter().map(|col| vec![0.0; col.len()]).collect();
 
     for row in leaf_points.axis_iter(ndarray::Axis(0)) {
         for (j, &idx) in row.iter().enumerate() {
@@ -58,11 +52,7 @@ pub fn get_component_weights(
     weights
 }
 
-pub fn identify_no_sign(
-    grid_values: &mut [Vec<f64>],
-    weights: &[Vec<f64>],
-    scaling: &mut f64,
-) {
+pub fn identify_no_sign(grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {
     for dim in 0..grid_values.len() {
         let curr_weights = &weights[dim];
         let curr_grid_values = &mut grid_values[dim];

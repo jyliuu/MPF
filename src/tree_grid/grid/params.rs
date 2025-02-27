@@ -1,5 +1,5 @@
 #[derive(Debug, Clone)]
-pub enum SplitStrategy {
+pub enum SplitStrategyParams {
     RandomSplit {
         split_try: usize,
         colsample_bytree: f64,
@@ -8,7 +8,7 @@ pub enum SplitStrategy {
 }
 
 #[derive(Debug, Clone)]
-pub enum CandidateStrategy {
+pub enum CandidateStrategyParams {
     GreedySelection,
     // Add other strategies here as needed
 }
@@ -16,8 +16,8 @@ pub enum CandidateStrategy {
 #[derive(Debug, Clone)]
 pub struct TreeGridParams {
     pub n_iter: usize,
-    pub split_strategy: SplitStrategy,
-    pub candidate_strategy: CandidateStrategy,
+    pub split_strategy_params: SplitStrategyParams,
+    pub candidate_strategy_params: CandidateStrategyParams,
     pub identified: bool,
 }
 
@@ -27,7 +27,7 @@ pub struct TreeGridParamsBuilder {
     n_iter: usize,
     split_try: usize,
     colsample_bytree: f64,
-    candidate_strategy: CandidateStrategy,
+    candidate_strategy_params: CandidateStrategyParams,
     identified: bool,
 }
 
@@ -37,7 +37,7 @@ impl TreeGridParamsBuilder {
             n_iter: 25,
             split_try: 10,
             colsample_bytree: 1.0,
-            candidate_strategy: CandidateStrategy::GreedySelection,
+            candidate_strategy_params: CandidateStrategyParams::GreedySelection,
             identified: true,
         }
     }
@@ -57,8 +57,8 @@ impl TreeGridParamsBuilder {
         self
     }
 
-    pub fn candidate_strategy(mut self, strategy: CandidateStrategy) -> Self {
-        self.candidate_strategy = strategy;
+    pub fn candidate_strategy_params(mut self, strategy: CandidateStrategyParams) -> Self {
+        self.candidate_strategy_params = strategy;
         self
     }
 
@@ -70,11 +70,11 @@ impl TreeGridParamsBuilder {
     pub fn build(self) -> TreeGridParams {
         TreeGridParams {
             n_iter: self.n_iter,
-            split_strategy: SplitStrategy::RandomSplit {
+            split_strategy_params: SplitStrategyParams::RandomSplit {
                 split_try: self.split_try,
                 colsample_bytree: self.colsample_bytree,
             },
-            candidate_strategy: self.candidate_strategy,
+            candidate_strategy_params: self.candidate_strategy_params,
             identified: self.identified,
         }
     }
@@ -90,11 +90,11 @@ impl Default for TreeGridParams {
     fn default() -> Self {
         TreeGridParams {
             n_iter: 25,
-            split_strategy: SplitStrategy::RandomSplit {
+            split_strategy_params: SplitStrategyParams::RandomSplit {
                 split_try: 10,
                 colsample_bytree: 1.0,
             },
-            candidate_strategy: CandidateStrategy::GreedySelection,
+            candidate_strategy_params: CandidateStrategyParams::GreedySelection,
             identified: true,
         }
     }

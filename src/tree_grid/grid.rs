@@ -10,7 +10,7 @@ pub mod strategies;
 // Re-export TreeGridFitter for backward compatibility
 pub use fitter::TreeGridFitter;
 // Re-export TreeGridParams and related types
-pub use params::{CandidateStrategy, SplitStrategy, TreeGridParams, TreeGridParamsBuilder};
+pub use params::{TreeGridParams, TreeGridParamsBuilder};
 
 /// A more efficient representation of grid data for a single dimension
 #[derive(Debug, Clone)]

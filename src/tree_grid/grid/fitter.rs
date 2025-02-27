@@ -1,18 +1,19 @@
 use std::vec;
 
-use itertools::Itertools;
-use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
+use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
 use rand::Rng;
 
-use crate::{FitResult, ModelFitter};
+use crate::FitResult;
 
 use super::{
     candidates::{
         find_refine_candidate, find_slice_candidate, update_leaf_points, update_predictions,
         RefineCandidate,
     },
-    params::{CandidateStrategy, TreeGridParams},
-    strategies::{compute_initial_values, get_component_weights, identify_no_sign, sample_splits},
+    params::{CandidateStrategyParams, SplitStrategyParams, TreeGridParams},
+    strategies::{
+        compute_initial_values, get_component_weights, identify_no_sign, RandomSplit, SplitStrategy,
+    },
     FittedTreeGrid,
 };
 
@@ -23,7 +24,20 @@ pub fn fit<R: Rng + ?Sized>(
     rng: &mut R,
 ) -> (FitResult, FittedTreeGrid) {
     let fitter = TreeGridFitter::new(x.view(), y.view());
-    fitter.fit(hyperparameters, rng)
+
+    let split_strategy = match hyperparameters.split_strategy_params {
+        SplitStrategyParams::RandomSplit {
+            split_try,
+            colsample_bytree,
+        } => RandomSplit {
+            split_try,
+            ncols_to_sample: (colsample_bytree * x.ncols() as f64) as usize,
+            nrows: x.nrows(),
+            ncols: x.ncols(),
+        },
+    };
+
+    fitter.fit(hyperparameters, &split_strategy, rng)
 }
 
 #[derive(Debug)]
@@ -80,13 +94,8 @@ impl TreeGridFitter<'_> {
     }
 }
 
-impl<'a> ModelFitter for TreeGridFitter<'a> {
-    type HyperParameters = TreeGridParams;
-    type Model = FittedTreeGrid;
-    type Features = ArrayView2<'a, f64>;
-    type Labels = ArrayView1<'a, f64>;
-
-    fn new(x: Self::Features, y: Self::Labels) -> Self {
+impl<'a> TreeGridFitter<'a> {
+    fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
         let leaf_points = Array2::zeros((x.nrows(), x.ncols()));
         let splits = vec![vec![]; x.ncols()];
         let intervals: Vec<Vec<(f64, f64)>> =
@@ -108,59 +117,52 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
         }
     }
 
-    fn fit<R: Rng + ?Sized>(
+    fn fit<R, S>(
         mut self,
-        hyperparameters: &Self::HyperParameters,
+        hyperparameters: &TreeGridParams,
+        split_strategy: &S,
         rng: &mut R,
-    ) -> (FitResult, Self::Model) {
+    ) -> (FitResult, FittedTreeGrid)
+    where
+        R: Rng + ?Sized,
+        S: SplitStrategy,
+    {
         let n_cols = self.x.ncols();
         let n_rows = self.x.nrows();
 
-        // Sample splits based on strategy
-        let (split_idx, col_idx, split_try, n_cols_to_sample) = sample_splits(
-            &hyperparameters.split_strategy,
-            rng,
-            n_rows,
-            n_cols,
-            hyperparameters.n_iter,
-        );
-
         // Main fitting loop
         for iter in 0..hyperparameters.n_iter {
-            let curr_it_split_idx = &split_idx[iter * split_try..(iter + 1) * split_try];
-            let curr_it_col_idx = &col_idx[iter * n_cols_to_sample..(iter + 1) * n_cols_to_sample];
+            let (curr_it_split_idx, curr_it_col_idx) = split_strategy.sample_splits(rng);
 
             // Select best candidate based on strategy
-            let best_candidate = match hyperparameters.candidate_strategy {
-                CandidateStrategy::GreedySelection => {
-                    let mut best_candidate = None;
-                    let mut best_err_diff = f64::NEG_INFINITY;
+            let best_candidate = {
+                let mut best_candidate = None;
+                let mut best_err_diff = f64::NEG_INFINITY;
 
-                    for &col in curr_it_col_idx {
-                        for &idx in curr_it_split_idx {
-                            let split = self.x[[idx, col]];
-                            let slice_candidate =
-                                find_slice_candidate(&self.splits, &self.intervals, col, split);
-                            let (err_new, err_old, refine_candidate) = find_refine_candidate(
-                                slice_candidate,
-                                self.x,
-                                &self.leaf_points,
-                                &self.grid_values,
-                                &self.intervals,
-                                self.residuals.view(),
-                                self.y_hat.view(),
-                            );
+                for &col in &curr_it_col_idx {
+                    for &idx in &curr_it_split_idx {
+                        let split = self.x[[idx, col]];
+                        let slice_candidate =
+                            find_slice_candidate(&self.splits, &self.intervals, col, split);
+                        let (err_new, err_old, refine_candidate) = find_refine_candidate(
+                            slice_candidate,
+                            self.x,
+                            &self.leaf_points,
+                            &self.grid_values,
+                            &self.intervals,
+                            self.residuals.view(),
+                            self.y_hat.view(),
+                        );
 
-                            let err_diff = err_old - err_new;
-                            if err_diff > best_err_diff {
-                                best_candidate = Some(refine_candidate);
-                                best_err_diff = err_diff;
-                            }
+                        let err_diff = err_old - err_new;
+                        if err_diff > best_err_diff {
+                            best_candidate = Some(refine_candidate);
+                            best_err_diff = err_diff;
                         }
                     }
-
-                    best_candidate
                 }
+
+                best_candidate
             };
 
             // Update tree with best candidate
