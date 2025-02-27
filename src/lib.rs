@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
+pub mod family;
 pub mod forest;
+pub mod grid;
 pub mod test_data;
-pub mod tree_grid;
 use ndarray::{Array1, ArrayView2};
 use rand::Rng;
 

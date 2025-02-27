@@ -1,8 +1,9 @@
 use std::{ops::Div, time::SystemTime};
 
 use mpf::{
+    family::boosted::TreeGridFamilyBoostedParams,
     forest::forest_fitter::{fit_boosted, MPFBoostedParams},
-    tree_grid::{family::boosted::TreeGridFamilyBoostedParams, grid::params::TreeGridParams},
+    grid::params::TreeGridParams,
     FittedModel,
 };
 use ndarray::s;

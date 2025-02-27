@@ -1,7 +1,7 @@
 use ndarray::{Array1, ArrayView2};
 
 use crate::{
-    tree_grid::family::{Aggregation, AggregationMethod, TreeGridFamily},
+    family::{Aggregation, AggregationMethod, TreeGridFamily},
     FittedModel,
 };
 

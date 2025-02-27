@@ -2,7 +2,7 @@ use ndarray::{ArrayView1, ArrayView2};
 use rand::{rngs::StdRng, SeedableRng};
 
 use crate::{
-    tree_grid::family::{
+    family::{
         boosted::{
             self, BoostedVariant, TreeGridFamilyBoostedParams, TreeGridFamilyBoostedParamsBuilder,
         },
@@ -127,9 +127,9 @@ pub fn fit_boosted(
 #[cfg(test)]
 mod tests {
     use crate::{
+        family::boosted::TreeGridFamilyBoostedParams,
         forest::forest_fitter::{fit_boosted, MPFBoostedParams, MPFBoostedParamsBuilder},
         test_data::setup_data_csv,
-        tree_grid::{family::boosted::TreeGridFamilyBoostedParams, grid::params::TreeGridParams},
         FittedModel,
     };
     use ndarray::s;

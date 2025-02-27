@@ -1,3 +1,4 @@
+use crate::grid::candidates::RefineCandidate;
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
 use rand::{seq::index::sample, Rng};
 

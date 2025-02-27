@@ -5,17 +5,15 @@ use rand::Rng;
 
 use crate::FitResult;
 
-use super::{
-    candidates::{
-        find_refine_candidate, find_slice_candidate, update_leaf_points, update_predictions,
-        RefineCandidate,
-    },
-    params::{CandidateStrategyParams, SplitStrategyParams, TreeGridParams},
-    strategies::{
-        compute_initial_values, get_component_weights, identify_no_sign, RandomSplit, SplitStrategy,
-    },
-    FittedTreeGrid,
+use crate::grid::candidates::{
+    find_refine_candidate, find_slice_candidate, update_leaf_points, update_predictions,
+    RefineCandidate,
 };
+use crate::grid::params::{CandidateStrategyParams, SplitStrategyParams, TreeGridParams};
+use crate::grid::strategies::{
+    compute_initial_values, get_component_weights, identify_no_sign, RandomSplit, SplitStrategy,
+};
+use crate::grid::FittedTreeGrid;
 
 pub fn fit<R: Rng + ?Sized>(
     x: ArrayView2<f64>,

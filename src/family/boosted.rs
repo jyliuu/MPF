@@ -2,7 +2,7 @@ use ndarray::{Array1, ArrayView1, ArrayView2};
 use rand::{Rng, SeedableRng};
 
 use crate::{
-    tree_grid::grid::{
+    grid::{
         self, compute_inner_product, get_aligned_signs_for_all_tree_grids,
         params::{TreeGridParams, TreeGridParamsBuilder},
     },
@@ -303,7 +303,7 @@ mod tests {
     use crate::{
         forest::forest_fitter::{fit_boosted, MPFBoostedParams},
         test_data::setup_data_csv,
-        tree_grid::grid::{params::TreeGridParams, FittedTreeGrid},
+        grid::{params::TreeGridParams, FittedTreeGrid},
         FittedModel,
     };
 
