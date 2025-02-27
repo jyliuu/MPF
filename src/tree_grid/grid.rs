@@ -1,9 +1,16 @@
-use fitter::TreeGridFitter;
 use ndarray::{Array1, ArrayView2, Axis};
 
 use crate::FittedModel;
 
+pub mod candidates;
 pub mod fitter;
+pub mod params;
+pub mod strategies;
+
+// Re-export TreeGridFitter for backward compatibility
+pub use fitter::TreeGridFitter;
+// Re-export TreeGridParams and related types
+pub use params::{CandidateStrategy, SplitStrategy, TreeGridParams, TreeGridParamsBuilder};
 
 /// A more efficient representation of grid data for a single dimension
 #[derive(Debug, Clone)]
@@ -245,7 +252,6 @@ impl<'a> From<TreeGridFitter<'a>> for FittedTreeGrid {
 mod tests {
     use super::*;
     use crate::test_data::setup_data_csv;
-    use fitter::TreeGridParams;
     use rand::{rngs::StdRng, SeedableRng};
 
     #[test]

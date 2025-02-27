@@ -8,7 +8,7 @@ use numpy::{PyArray1, ToPyArray};
 
 use mpf::{
     forest::{
-        forest_fitter::{fit_boosted, MPFBoostedParams},
+        forest_fitter::{fit_boosted, MPFBoostedParams, MPFBoostedParamsBuilder},
         mpf::MPF,
     },
     tree_grid::{
@@ -16,7 +16,7 @@ use mpf::{
             boosted::{BoostedVariant, TreeGridFamilyBoostedParams},
             TreeGridFamily,
         },
-        grid::{self, fitter::TreeGridParams, FittedTreeGrid},
+        grid::{self, FittedTreeGrid, TreeGridParams, TreeGridParamsBuilder},
     },
     FitResult, FittedModel,
 };
@@ -168,19 +168,18 @@ impl MPFBoostedPy {
     ) -> PyResult<(MPFBoostedPy, FitResultPy)> {
         let x = x.as_array();
         let y = y.as_array();
-        let params = MPFBoostedParams {
-            epochs,
-            tgf_params: TreeGridFamilyBoostedParams {
-                B,
-                tg_params: TreeGridParams {
-                    n_iter,
-                    split_try,
-                    colsample_bytree,
-                    identified,
-                },
-            },
-            seed,
-        };
+
+        // Use the builder pattern
+        let params = MPFBoostedParamsBuilder::new()
+            .epochs(epochs)
+            .B(B)
+            .n_iter(n_iter)
+            .split_try(split_try)
+            .colsample_bytree(colsample_bytree)
+            .identified(identified)
+            .seed(seed)
+            .build();
+
         let (fit_result, mpf) = fit_boosted(x, y, &params);
         Ok((mpf.into(), FitResultPy::from(fit_result)))
     }
@@ -236,12 +235,12 @@ impl TreeGridPy {
     ) -> PyResult<(TreeGridPy, FitResultPy)> {
         let x = x.as_array();
         let y = y.as_array();
-        let params = TreeGridParams {
-            n_iter,
-            split_try,
-            colsample_bytree,
-            identified,
-        };
+        let params = TreeGridParamsBuilder::new()
+            .n_iter(n_iter)
+            .split_try(split_try)
+            .colsample_bytree(colsample_bytree)
+            .identified(identified)
+            .build();
         let mut rng = StdRng::seed_from_u64(seed);
         let (fit_result, tg) = grid::fitter::fit(x.view(), y.view(), &params, &mut rng);
         Ok((tg.into(), FitResultPy::from(fit_result)))

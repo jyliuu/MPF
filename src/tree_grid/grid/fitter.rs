@@ -2,11 +2,19 @@ use std::vec;
 
 use itertools::Itertools;
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
-use rand::{seq::index::sample, Rng};
+use rand::Rng;
 
 use crate::{FitResult, ModelFitter};
 
-use super::FittedTreeGrid;
+use super::{
+    candidates::{
+        find_refine_candidate, find_slice_candidate, update_leaf_points, update_predictions,
+        RefineCandidate,
+    },
+    params::{CandidateStrategy, TreeGridParams},
+    strategies::{compute_initial_values, get_component_weights, identify_no_sign, sample_splits},
+    FittedTreeGrid,
+};
 
 pub fn fit<R: Rng + ?Sized>(
     x: ArrayView2<f64>,
@@ -29,239 +37,6 @@ pub struct TreeGridFitter<'a> {
     pub y_hat: Array1<f64>,
     pub residuals: Array1<f64>,
     pub scaling: f64,
-}
-
-#[derive(Debug, Clone)]
-pub struct TreeGridParams {
-    pub n_iter: usize,
-    pub split_try: usize,
-    pub colsample_bytree: f64,
-    pub identified: bool,
-}
-
-impl Default for TreeGridParams {
-    fn default() -> Self {
-        TreeGridParams {
-            n_iter: 25,
-            split_try: 10,
-            colsample_bytree: 1.0,
-            identified: true,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct SliceCandidate {
-    col: usize,
-    split: f64,
-    index: usize,
-    left: (f64, f64),
-    right: (f64, f64),
-}
-
-#[derive(Debug)]
-pub struct RefineCandidate {
-    pub col: usize,
-    pub split: f64,
-    index: usize,
-    left: (f64, f64),
-    right: (f64, f64),
-    pub update_a: f64,
-    pub update_b: f64,
-    a_points_idx: Vec<usize>,
-    b_points_idx: Vec<usize>,
-    curr_leaf_points_idx: Vec<usize>,
-}
-
-fn compute_initial_values(
-    x: ArrayView2<f64>,
-    y: ArrayView1<f64>,
-) -> (f64, Vec<Vec<f64>>, Array1<f64>) {
-    let mean = y.mean().unwrap();
-    let init_value: f64 = mean.abs().powf(1.0 / x.ncols() as f64);
-    let sign = mean.signum();
-    let mut grid_values = vec![vec![init_value]; x.ncols() - 1];
-    grid_values.insert(0, vec![sign * init_value]);
-    let y_hat = Array1::from_vec(vec![mean; x.nrows()]);
-    (mean, grid_values, y_hat)
-}
-
-pub fn find_slice_candidate(
-    splits: &[Vec<f64>],
-    intervals: &[Vec<(f64, f64)>],
-    col: usize,
-    split: f64,
-) -> SliceCandidate {
-    let splits = &splits[col];
-    let intervals = &intervals[col];
-
-    let index = splits
-        .iter()
-        .position(|&x| split < x)
-        .unwrap_or(splits.len());
-
-    let (begin, end) = intervals[index];
-    let left = (begin, split);
-    let right = (split, end);
-
-    SliceCandidate {
-        col,
-        split,
-        index,
-        left,
-        right,
-    }
-}
-
-fn compute_leaf_values(leaf: &Array1<usize>, grid_values: &[Vec<f64>]) -> f64 {
-    leaf.indexed_iter()
-        .map(|(i, &idx)| grid_values[i][idx])
-        .product()
-}
-
-pub fn find_refine_candidate(
-    slice_candidate: SliceCandidate,
-    x: ArrayView2<f64>,
-    leaf_points: &Array2<usize>,
-    grid_values: &[Vec<f64>],
-    intervals: &[Vec<(f64, f64)>],
-    residuals: ArrayView1<'_, f64>,
-    y_hat: ArrayView1<'_, f64>,
-) -> (f64, f64, RefineCandidate) {
-    let SliceCandidate {
-        col,
-        split,
-        index,
-        left,
-        right,
-    } = slice_candidate;
-
-    let mut dims = vec![];
-    for dim in 0..x.ncols() {
-        dims.push(if dim == col {
-            vec![index]
-        } else {
-            (0..intervals[dim].len()).collect()
-        });
-    }
-    let leaves: Vec<Array1<usize>> = dims
-        .into_iter()
-        .multi_cartesian_product()
-        .map(Array1::from)
-        .collect();
-
-    let [mut n_a, mut n_b, mut m_a, mut m_b] = [0.0; 4];
-
-    let curr_leaf_points_idx: Vec<usize> = leaf_points
-        .index_axis(Axis(1), col)
-        .indexed_iter()
-        .filter(|(_, &x)| x == index)
-        .map(|(i, _)| i)
-        .collect();
-    let curr_leaf_leaf_points = leaf_points.select(Axis(0), &curr_leaf_points_idx);
-
-    for leaf in &leaves {
-        let v = compute_leaf_values(leaf, grid_values);
-        let v_pow2 = v.powi(2);
-        for (idx, row) in curr_leaf_leaf_points.axis_iter(Axis(0)).enumerate() {
-            if row != leaf {
-                continue;
-            }
-
-            let idx = curr_leaf_points_idx[idx];
-            if x[(idx, col)] < split {
-                n_a += v_pow2;
-                m_a += v * residuals[idx];
-            } else {
-                n_b += v_pow2;
-                m_b += v * residuals[idx];
-            }
-        }
-    }
-
-    let update_a = if n_a == 0.0 { 1.0 } else { m_a / n_a + 1.0 };
-    let update_b = if n_b == 0.0 { 1.0 } else { m_b / n_b + 1.0 };
-
-    let err_old = residuals
-        .select(Axis(0), &curr_leaf_points_idx)
-        .pow2()
-        .sum();
-
-    let curr_points = x.select(Axis(0), &curr_leaf_points_idx);
-
-    let (a_points_idx, b_points_idx): (Vec<_>, Vec<_>) = curr_points
-        .index_axis(Axis(1), col)
-        .indexed_iter()
-        .map(|(i, &x)| {
-            if x < split {
-                (curr_leaf_points_idx[i], true)
-            } else {
-                (curr_leaf_points_idx[i], false)
-            }
-        })
-        .partition(|(_, is_a)| *is_a);
-
-    let new_resid_a = a_points_idx
-        .iter()
-        .map(|(i, _)| y_hat[*i].mul_add(1.0 - update_a, residuals[*i]))
-        .collect::<Array1<f64>>();
-    let new_resid_b = b_points_idx
-        .iter()
-        .map(|(i, _)| y_hat[*i].mul_add(1.0 - update_b, residuals[*i]))
-        .collect::<Array1<f64>>();
-
-    let err_new = new_resid_a.powi(2).sum() + new_resid_b.powi(2).sum();
-
-    let refine_candidate = RefineCandidate {
-        col,
-        split,
-        index,
-        left,
-        right,
-        update_a,
-        update_b,
-        a_points_idx: a_points_idx.into_iter().map(|(i, _)| i).collect(),
-        b_points_idx: b_points_idx.into_iter().map(|(i, _)| i).collect(),
-        curr_leaf_points_idx,
-    };
-
-    (err_new, err_old, refine_candidate)
-}
-
-fn update_leaf_points(
-    leaf_points: &mut Array2<usize>,
-    dim: usize,
-    index: usize,
-    leaf_points_b: &[usize],
-) {
-    leaf_points.axis_iter_mut(Axis(0)).for_each(|mut x| {
-        if x[dim] > index {
-            x[dim] += 1;
-        }
-    });
-
-    for &i in leaf_points_b {
-        leaf_points[(i, dim)] += 1;
-    }
-}
-
-fn update_predictions(
-    y_hat: &mut Array1<f64>,
-    residuals: &mut Array1<f64>,
-    labels: ArrayView1<f64>,
-    a_points_idx: &[usize],
-    b_points_idx: &[usize],
-    update_a: f64,
-    update_b: f64,
-) {
-    for &i in a_points_idx {
-        y_hat[i] *= update_a;
-        residuals[i] = labels[i] - y_hat[i];
-    }
-    for &i in b_points_idx {
-        y_hat[i] *= update_b;
-        residuals[i] = labels[i] - y_hat[i];
-    }
 }
 
 impl TreeGridFitter<'_> {
@@ -299,121 +74,9 @@ impl TreeGridFitter<'_> {
         );
     }
 
-    fn get_component_weights(&self) -> Vec<Vec<f64>> {
-        let mut weights: Vec<Vec<f64>> = self
-            .grid_values
-            .iter()
-            .map(|col| vec![0.0; col.len()])
-            .collect();
-
-        for (i, row) in self.leaf_points.axis_iter(Axis(0)).enumerate() {
-            for (j, &idx) in row.iter().enumerate() {
-                weights[j][idx] += 1.0;
-            }
-        }
-
-        weights
-    }
-
-    fn identify(&mut self) {
-        let weights = self.get_component_weights();
-
-        for dim in 0..self.grid_values.len() {
-            let weights_sum: f64 = weights[dim].iter().sum();
-            let sign_changing = self.grid_values[dim].iter().any(|&x| x.is_sign_negative())
-                && self.grid_values[dim].iter().any(|&x| x.is_sign_positive());
-
-            let weighted_mean = self.grid_values[dim]
-                .iter()
-                .zip(weights[dim].iter())
-                .map(|(&x, &w)| x * w)
-                .sum::<f64>()
-                / weights_sum;
-
-            let scale = if sign_changing {
-                let l2_weighted_norm = self.grid_values[dim]
-                    .iter()
-                    .zip(weights[dim].iter())
-                    .map(|(&x, &w)| x.powi(2) * w)
-                    .sum::<f64>();
-                weighted_mean.signum() * (l2_weighted_norm / weights_sum).sqrt()
-            } else {
-                weighted_mean
-            };
-
-            self.grid_values[dim].iter_mut().for_each(|x| *x /= scale);
-            self.scaling *= scale;
-        }
-    }
-
-    fn identify_single_point_sign(&mut self) {
-        let weights = self.get_component_weights();
-
-        for dim in 0..self.grid_values.len() {
-            let curr_weights = &weights[dim];
-            let curr_grid_values = &mut self.grid_values[dim];
-
-            let weights_sum: f64 = curr_weights.iter().sum();
-            let sign_changing = curr_grid_values.iter().any(|&x| x.is_sign_negative())
-                && curr_grid_values.iter().any(|&x| x.is_sign_positive());
-
-            let interval_id_contains_0 = self.intervals[dim]
-                .iter()
-                .position(|&(a, b)| a <= 0.0 && b >= 0.0)
-                .unwrap();
-
-            let sign = curr_grid_values[interval_id_contains_0].signum();
-
-            let weighted_mean = curr_grid_values
-                .iter()
-                .zip(weights[dim].iter())
-                .map(|(&x, &w)| x * w)
-                .sum::<f64>()
-                / weights_sum;
-
-            let scale = if sign_changing {
-                let l2_weighted_norm = curr_grid_values
-                    .iter()
-                    .zip(weights[dim].iter())
-                    .map(|(&x, &w)| x.powi(2) * w)
-                    .sum::<f64>();
-                sign * (l2_weighted_norm / weights_sum).sqrt()
-            } else {
-                weighted_mean
-            };
-
-            curr_grid_values.iter_mut().for_each(|x| *x /= scale);
-            self.scaling *= scale;
-        }
-    }
-
     fn identify_no_sign(&mut self) {
-        let weights = self.get_component_weights();
-
-        for dim in 0..self.grid_values.len() {
-            let curr_weights = &weights[dim];
-            let curr_grid_values = &mut self.grid_values[dim];
-
-            let weights_sum: f64 = curr_weights.iter().sum();
-
-            let weighted_mean = curr_grid_values
-                .iter()
-                .zip(weights[dim].iter())
-                .map(|(&x, &w)| x * w)
-                .sum::<f64>()
-                / weights_sum;
-
-            let l2_weighted_norm = curr_grid_values
-                .iter()
-                .zip(weights[dim].iter())
-                .map(|(&x, &w)| x.powi(2) * w)
-                .sum::<f64>();
-
-            let scale = (l2_weighted_norm / weights_sum).sqrt();
-
-            curr_grid_values.iter_mut().for_each(|x| *x /= scale);
-            self.scaling *= scale;
-        }
+        let weights = get_component_weights(&self.leaf_points, &self.grid_values);
+        identify_no_sign(&mut self.grid_values, &weights, &mut self.scaling);
     }
 }
 
@@ -453,62 +116,64 @@ impl<'a> ModelFitter for TreeGridFitter<'a> {
         let n_cols = self.x.ncols();
         let n_rows = self.x.nrows();
 
-        let &Self::HyperParameters {
-            n_iter,
-            split_try,
-            colsample_bytree,
-            identified,
-        } = hyperparameters;
+        // Sample splits based on strategy
+        let (split_idx, col_idx, split_try, n_cols_to_sample) = sample_splits(
+            &hyperparameters.split_strategy,
+            rng,
+            n_rows,
+            n_cols,
+            hyperparameters.n_iter,
+        );
 
-        let n_cols_to_sample = (colsample_bytree * n_cols as f64) as usize;
-
-        let split_idx: Vec<usize> = sample(rng, n_rows, split_try * n_iter)
-            .into_iter()
-            .collect();
-
-        let col_idx: Vec<usize> = (0..n_cols_to_sample * n_iter)
-            .map(|_| rng.gen_range(0..n_cols))
-            .collect();
-
-        for iter in 0..n_iter {
-            let mut best_candidate: Option<RefineCandidate> = None;
-            let mut best_err_diff = f64::NEG_INFINITY;
-
+        // Main fitting loop
+        for iter in 0..hyperparameters.n_iter {
             let curr_it_split_idx = &split_idx[iter * split_try..(iter + 1) * split_try];
             let curr_it_col_idx = &col_idx[iter * n_cols_to_sample..(iter + 1) * n_cols_to_sample];
 
-            for &col in curr_it_col_idx {
-                for &idx in curr_it_split_idx {
-                    let split = self.x[[idx, col]];
-                    let slice_candidate =
-                        find_slice_candidate(&self.splits, &self.intervals, col, split);
-                    let (err_new, err_old, refine_candidate) = find_refine_candidate(
-                        slice_candidate,
-                        self.x,
-                        &self.leaf_points,
-                        &self.grid_values,
-                        &self.intervals,
-                        self.residuals.view(),
-                        self.y_hat.view(),
-                    );
+            // Select best candidate based on strategy
+            let best_candidate = match hyperparameters.candidate_strategy {
+                CandidateStrategy::GreedySelection => {
+                    let mut best_candidate = None;
+                    let mut best_err_diff = f64::NEG_INFINITY;
 
-                    let err_diff = err_old - err_new;
-                    if err_diff > best_err_diff {
-                        best_candidate = Some(refine_candidate);
-                        best_err_diff = err_diff;
+                    for &col in curr_it_col_idx {
+                        for &idx in curr_it_split_idx {
+                            let split = self.x[[idx, col]];
+                            let slice_candidate =
+                                find_slice_candidate(&self.splits, &self.intervals, col, split);
+                            let (err_new, err_old, refine_candidate) = find_refine_candidate(
+                                slice_candidate,
+                                self.x,
+                                &self.leaf_points,
+                                &self.grid_values,
+                                &self.intervals,
+                                self.residuals.view(),
+                                self.y_hat.view(),
+                            );
+
+                            let err_diff = err_old - err_new;
+                            if err_diff > best_err_diff {
+                                best_candidate = Some(refine_candidate);
+                                best_err_diff = err_diff;
+                            }
+                        }
                     }
-                }
-            }
 
+                    best_candidate
+                }
+            };
+
+            // Update tree with best candidate
             if let Some(candidate) = best_candidate {
                 self.update_tree(candidate);
             }
         }
 
         let err = self.residuals.pow2().mean().unwrap();
-        if identified {
+        if hyperparameters.identified {
             self.identify_no_sign();
         }
+
         let residuals = self.residuals;
         let y_hat = self.y_hat;
 

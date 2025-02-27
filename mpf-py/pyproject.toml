@@ -5,3 +5,4 @@ build-backend = "maturin"
 [tool.maturin]
 python-source = "python"
 module-name = "mpf_py._mpf_py"
+features = ["use-rayon"]

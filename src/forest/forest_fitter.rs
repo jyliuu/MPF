@@ -3,7 +3,9 @@ use rand::{rngs::StdRng, SeedableRng};
 
 use crate::{
     tree_grid::family::{
-        boosted::{self, BoostedVariant, TreeGridFamilyBoostedParams},
+        boosted::{
+            self, BoostedVariant, TreeGridFamilyBoostedParams, TreeGridFamilyBoostedParamsBuilder,
+        },
         TreeGridFamily,
     },
     FitResult,
@@ -17,13 +19,76 @@ pub struct MPFBoostedParams {
     pub seed: u64,
 }
 
-impl Default for MPFBoostedParams {
-    fn default() -> Self {
-        MPFBoostedParams {
+// Builder for MPFBoostedParams
+pub struct MPFBoostedParamsBuilder {
+    epochs: usize,
+    tgf_params_builder: TreeGridFamilyBoostedParamsBuilder,
+    seed: u64,
+}
+
+impl MPFBoostedParamsBuilder {
+    pub fn new() -> Self {
+        Self {
             epochs: 5,
-            tgf_params: TreeGridFamilyBoostedParams::default(),
+            tgf_params_builder: TreeGridFamilyBoostedParamsBuilder::new(),
             seed: 42,
         }
+    }
+
+    pub fn epochs(mut self, epochs: usize) -> Self {
+        self.epochs = epochs;
+        self
+    }
+
+    pub fn seed(mut self, seed: u64) -> Self {
+        self.seed = seed;
+        self
+    }
+
+    // Convenience methods for nested parameters
+    pub fn B(mut self, B: usize) -> Self {
+        self.tgf_params_builder = self.tgf_params_builder.B(B);
+        self
+    }
+
+    pub fn n_iter(mut self, n_iter: usize) -> Self {
+        self.tgf_params_builder = self.tgf_params_builder.n_iter(n_iter);
+        self
+    }
+
+    pub fn split_try(mut self, split_try: usize) -> Self {
+        self.tgf_params_builder = self.tgf_params_builder.split_try(split_try);
+        self
+    }
+
+    pub fn colsample_bytree(mut self, colsample_bytree: f64) -> Self {
+        self.tgf_params_builder = self.tgf_params_builder.colsample_bytree(colsample_bytree);
+        self
+    }
+
+    pub fn identified(mut self, identified: bool) -> Self {
+        self.tgf_params_builder = self.tgf_params_builder.identified(identified);
+        self
+    }
+
+    pub fn build(self) -> MPFBoostedParams {
+        MPFBoostedParams {
+            epochs: self.epochs,
+            tgf_params: self.tgf_params_builder.build(),
+            seed: self.seed,
+        }
+    }
+}
+
+impl Default for MPFBoostedParamsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for MPFBoostedParams {
+    fn default() -> Self {
+        MPFBoostedParamsBuilder::new().build()
     }
 }
 
@@ -62,9 +127,9 @@ pub fn fit_boosted(
 #[cfg(test)]
 mod tests {
     use crate::{
-        forest::forest_fitter::{fit_boosted, MPFBoostedParams},
+        forest::forest_fitter::{fit_boosted, MPFBoostedParams, MPFBoostedParamsBuilder},
         test_data::setup_data_csv,
-        tree_grid::{family::boosted::TreeGridFamilyBoostedParams, grid::fitter::TreeGridParams},
+        tree_grid::{family::boosted::TreeGridFamilyBoostedParams, grid::params::TreeGridParams},
         FittedModel,
     };
     use ndarray::s;
@@ -105,19 +170,14 @@ mod tests {
     #[test]
     fn test_mpf_boosted_reproducibility() {
         let (x, y) = setup_data_csv();
-        let params = MPFBoostedParams {
-            epochs: 2,
-            tgf_params: TreeGridFamilyBoostedParams {
-                B: 5,
-                tg_params: TreeGridParams {
-                    n_iter: 10,
-                    split_try: 5,
-                    colsample_bytree: 1.0,
-                    identified: true,
-                },
-            },
-            seed: 42,
-        };
+
+        // Use builder pattern for cleaner parameter construction
+        let params = MPFBoostedParamsBuilder::new()
+            .epochs(2)
+            .B(5)
+            .n_iter(25) // Using default, but explicitly stated for clarity
+            .seed(42)
+            .build();
 
         // Train two models with the same seed
         let (_, model1) = fit_boosted(x.view(), y.view(), &params);
@@ -138,25 +198,25 @@ mod tests {
     #[test]
     fn test_mpf_boosted_different_seeds() {
         let (x, y) = setup_data_csv();
-        let base_params = MPFBoostedParams {
-            epochs: 2,
-            tgf_params: TreeGridFamilyBoostedParams {
-                B: 5,
-                tg_params: TreeGridParams {
-                    n_iter: 10,
-                    split_try: 5,
-                    colsample_bytree: 1.0,
-                    identified: true,
-                },
-            },
-            seed: 42,
-        };
+
+        // Use builder pattern for cleaner parameter construction
+        let params1 = MPFBoostedParamsBuilder::new()
+            .epochs(2)
+            .B(5)
+            .n_iter(25) // Using default, but explicitly stated for clarity
+            .seed(42)
+            .build();
 
         // Train models with different seeds
-        let (_, model1) = fit_boosted(x.view(), y.view(), &base_params);
+        let (_, model1) = fit_boosted(x.view(), y.view(), &params1);
 
-        let mut params2 = base_params;
-        params2.seed = 43;
+        let params2 = MPFBoostedParamsBuilder::new()
+            .epochs(2)
+            .B(5)
+            .n_iter(25)
+            .seed(43) // Different seed
+            .build();
+
         let (_, model2) = fit_boosted(x.view(), y.view(), &params2);
 
         // Generate predictions
@@ -180,19 +240,12 @@ mod tests {
         let y_mean = y.mean().unwrap();
         let error = y.view().map(|v| (v - y_mean).powi(2)).mean().unwrap();
 
-        let params = MPFBoostedParams {
-            epochs: 6,
-            tgf_params: TreeGridFamilyBoostedParams {
-                B: 44,
-                tg_params: TreeGridParams {
-                    n_iter: 23,
-                    split_try: 13,
-                    colsample_bytree: 1.0,
-                    identified: true,
-                },
-            },
-            seed: 42,
-        };
+        // Use builder pattern for cleaner parameter construction
+        let params = MPFBoostedParamsBuilder::new()
+            .epochs(6)
+            .B(44)
+            .n_iter(25) // Using default, but explicitly stated for clarity
+            .build();
 
         let (fit_result, model) = fit_boosted(x.view(), y.view(), &params);
         let preds = model.predict(x.view());

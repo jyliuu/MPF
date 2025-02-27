@@ -3,7 +3,8 @@ use rand::{Rng, SeedableRng};
 
 use crate::{
     tree_grid::grid::{
-        self, compute_inner_product, fitter::TreeGridParams, get_aligned_signs_for_all_tree_grids,
+        self, compute_inner_product, get_aligned_signs_for_all_tree_grids,
+        params::{TreeGridParams, TreeGridParamsBuilder},
     },
     FitResult, FittedModel,
 };
@@ -233,12 +234,64 @@ pub struct TreeGridFamilyBoostedParams {
     pub tg_params: TreeGridParams,
 }
 
+// Builder for TreeGridFamilyBoostedParams
+#[derive(Debug)]
+pub struct TreeGridFamilyBoostedParamsBuilder {
+    B: usize,
+    tg_params_builder: TreeGridParamsBuilder,
+}
+
+impl TreeGridFamilyBoostedParamsBuilder {
+    pub fn new() -> Self {
+        Self {
+            B: 100,
+            tg_params_builder: TreeGridParamsBuilder::new(),
+        }
+    }
+
+    pub fn B(mut self, B: usize) -> Self {
+        self.B = B;
+        self
+    }
+
+    // Convenience methods for TreeGridParams configuration
+    pub fn n_iter(mut self, n_iter: usize) -> Self {
+        self.tg_params_builder = self.tg_params_builder.n_iter(n_iter);
+        self
+    }
+
+    pub fn split_try(mut self, split_try: usize) -> Self {
+        self.tg_params_builder = self.tg_params_builder.split_try(split_try);
+        self
+    }
+
+    pub fn colsample_bytree(mut self, colsample_bytree: f64) -> Self {
+        self.tg_params_builder = self.tg_params_builder.colsample_bytree(colsample_bytree);
+        self
+    }
+
+    pub fn identified(mut self, identified: bool) -> Self {
+        self.tg_params_builder = self.tg_params_builder.identified(identified);
+        self
+    }
+
+    pub fn build(self) -> TreeGridFamilyBoostedParams {
+        TreeGridFamilyBoostedParams {
+            B: self.B,
+            tg_params: self.tg_params_builder.build(),
+        }
+    }
+}
+
+impl Default for TreeGridFamilyBoostedParamsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Default for TreeGridFamilyBoostedParams {
     fn default() -> Self {
-        TreeGridFamilyBoostedParams {
-            B: 100,
-            tg_params: TreeGridParams::default(),
-        }
+        TreeGridFamilyBoostedParamsBuilder::new().build()
     }
 }
 
@@ -250,7 +303,7 @@ mod tests {
     use crate::{
         forest::forest_fitter::{fit_boosted, MPFBoostedParams},
         test_data::setup_data_csv,
-        tree_grid::grid::{fitter::TreeGridParams, FittedTreeGrid},
+        tree_grid::grid::{params::TreeGridParams, FittedTreeGrid},
         FittedModel,
     };
 
@@ -268,12 +321,7 @@ mod tests {
                 seed: 42,
                 tgf_params: TreeGridFamilyBoostedParams {
                     B: 20,
-                    tg_params: TreeGridParams {
-                        n_iter: 10,
-                        split_try: 10,
-                        colsample_bytree: 1.0,
-                        identified: true,
-                    },
+                    tg_params: TreeGridParams::default(),
                 },
             },
         );
