@@ -65,7 +65,7 @@ pub fn find_refine_candidate(
     intervals: &[Vec<(f64, f64)>],
     residuals: ArrayView1<'_, f64>,
     y_hat: ArrayView1<'_, f64>,
-) -> (f64, f64, RefineCandidate) {
+) -> Result<(f64, f64, RefineCandidate), String> {
     let SliceCandidate {
         col,
         split,
@@ -139,6 +139,9 @@ pub fn find_refine_candidate(
         })
         .partition(|(_, is_a)| *is_a);
 
+    if a_points_idx.is_empty() || b_points_idx.is_empty() {
+        return Err("No points to update".to_string());
+    }
     let new_resid_a = a_points_idx
         .iter()
         .map(|(i, _)| y_hat[*i].mul_add(1.0 - update_a, residuals[*i]))
@@ -148,7 +151,9 @@ pub fn find_refine_candidate(
         .map(|(i, _)| y_hat[*i].mul_add(1.0 - update_b, residuals[*i]))
         .collect::<Array1<f64>>();
 
-    let err_new = new_resid_a.powi(2).sum() + new_resid_b.powi(2).sum();
+    let err_a = new_resid_a.powi(2).sum();
+    let err_b = new_resid_b.powi(2).sum();
+    let err_new = err_a + err_b;
 
     let refine_candidate = RefineCandidate {
         col,
@@ -163,7 +168,7 @@ pub fn find_refine_candidate(
         curr_leaf_points_idx,
     };
 
-    (err_new, err_old, refine_candidate)
+    Ok((err_new, err_old, refine_candidate))
 }
 
 pub fn update_leaf_points(
@@ -182,6 +187,7 @@ pub fn update_leaf_points(
         leaf_points[(i, dim)] += 1;
     }
 }
+
 
 pub fn update_predictions(
     y_hat: &mut Array1<f64>,

@@ -1,5 +1,4 @@
-use crate::grid::candidates::RefineCandidate;
-use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
+use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rand::{seq::index::sample, Rng};
 
 pub trait SplitStrategy {
@@ -51,6 +50,54 @@ pub fn get_component_weights(
     }
 
     weights
+}
+
+const MAX_PROJECTION_ITER: usize = 100;
+
+pub fn reproject_grid_values(
+    x: ArrayView2<f64>,
+    leaf_points: &Array2<usize>,
+    grid_values: &mut [Vec<f64>],
+    labels: ArrayView1<'_, f64>,
+    y_hat: ArrayView1<'_, f64>,
+) {
+    let mut y_hat_clone = y_hat.to_owned();
+    let mut residuals = labels.to_owned() - &y_hat_clone;
+    let mut err = residuals.pow2().sum();
+    for i in 0..MAX_PROJECTION_ITER {
+        for (dim, curr_grid_values) in grid_values.iter_mut().enumerate() {
+            for (idx, x) in curr_grid_values.iter_mut().enumerate() {
+                let curr_leaf_points_idx: Vec<usize> = leaf_points
+                    .index_axis(Axis(1), dim)
+                    .indexed_iter()
+                    .filter(|(_, &x)| x == idx)
+                    .map(|(i, _)| i)
+                    .collect();
+                let curr_y_hat = y_hat_clone.select(Axis(0), &curr_leaf_points_idx);
+                let curr_residuals = residuals.select(Axis(0), &curr_leaf_points_idx);
+
+                let numerator = curr_residuals
+                    .iter()
+                    .zip(curr_y_hat.iter())
+                    .map(|(r, y)| r * y)
+                    .sum::<f64>();
+                let denominator = curr_y_hat.pow2().sum();
+
+                let v_hat = numerator / denominator + 1.0;
+                *x *= v_hat;
+
+                for i in &curr_leaf_points_idx {
+                    y_hat_clone[*i] *= v_hat;
+                    residuals[*i] = labels[*i] - y_hat_clone[*i];
+                }
+            }
+        }
+        let new_err = residuals.pow2().sum();
+        if (new_err - err).abs() < 1e-6 {
+            break;
+        }
+        err = new_err;
+    }
 }
 
 pub fn identify_no_sign(grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {

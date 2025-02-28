@@ -19,6 +19,7 @@ pub struct TreeGridParams {
     pub split_strategy_params: SplitStrategyParams,
     pub candidate_strategy_params: CandidateStrategyParams,
     pub identified: bool,
+    pub reproject_grid_values: bool,
 }
 
 // Builder for TreeGridParams
@@ -29,6 +30,7 @@ pub struct TreeGridParamsBuilder {
     colsample_bytree: f64,
     candidate_strategy_params: CandidateStrategyParams,
     identified: bool,
+    reproject_grid_values: bool,
 }
 
 impl TreeGridParamsBuilder {
@@ -39,6 +41,7 @@ impl TreeGridParamsBuilder {
             colsample_bytree: 1.0,
             candidate_strategy_params: CandidateStrategyParams::GreedySelection,
             identified: true,
+            reproject_grid_values: true,
         }
     }
 
@@ -67,6 +70,11 @@ impl TreeGridParamsBuilder {
         self
     }
 
+    pub fn reproject_grid_values(mut self, reproject_grid_values: bool) -> Self {
+        self.reproject_grid_values = reproject_grid_values;
+        self
+    }
+
     pub fn build(self) -> TreeGridParams {
         TreeGridParams {
             n_iter: self.n_iter,
@@ -76,6 +84,7 @@ impl TreeGridParamsBuilder {
             },
             candidate_strategy_params: self.candidate_strategy_params,
             identified: self.identified,
+            reproject_grid_values: self.reproject_grid_values,
         }
     }
 }
@@ -96,6 +105,7 @@ impl Default for TreeGridParams {
             },
             candidate_strategy_params: CandidateStrategyParams::GreedySelection,
             identified: true,
+            reproject_grid_values: true,
         }
     }
 }

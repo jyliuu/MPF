@@ -1,6 +1,6 @@
 use std::vec;
 
-use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
+use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
 use rand::Rng;
 
 use crate::FitResult;
@@ -9,9 +9,10 @@ use crate::grid::candidates::{
     find_refine_candidate, find_slice_candidate, update_leaf_points, update_predictions,
     RefineCandidate,
 };
-use crate::grid::params::{CandidateStrategyParams, SplitStrategyParams, TreeGridParams};
+use crate::grid::params::{SplitStrategyParams, TreeGridParams};
 use crate::grid::strategies::{
-    compute_initial_values, get_component_weights, identify_no_sign, RandomSplit, SplitStrategy,
+    compute_initial_values, get_component_weights, identify_no_sign, reproject_grid_values,
+    RandomSplit, SplitStrategy,
 };
 use crate::grid::FittedTreeGrid;
 
@@ -43,6 +44,7 @@ pub struct TreeGridFitter<'a> {
     pub splits: Vec<Vec<f64>>,
     pub intervals: Vec<Vec<(f64, f64)>>,
     pub grid_values: Vec<Vec<f64>>,
+    pub leaf_point_counts: Vec<Vec<usize>>,
     pub leaf_points: Array2<usize>,
     pub labels: ArrayView1<'a, f64>,
     pub x: ArrayView2<'a, f64>,
@@ -74,6 +76,9 @@ impl TreeGridFitter<'_> {
         self.intervals[col][index] = left;
         self.intervals[col].insert(index + 1, right);
 
+        self.leaf_point_counts[col][index] = a_points_idx.len();
+        self.leaf_point_counts[col].insert(index + 1, b_points_idx.len());
+
         update_leaf_points(&mut self.leaf_points, col, index, &b_points_idx);
         update_predictions(
             &mut self.y_hat,
@@ -95,18 +100,19 @@ impl TreeGridFitter<'_> {
 impl<'a> TreeGridFitter<'a> {
     fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
         let leaf_points = Array2::zeros((x.nrows(), x.ncols()));
+        let leaf_point_counts = vec![vec![x.nrows()]; x.ncols()];
         let splits = vec![vec![]; x.ncols()];
         let intervals: Vec<Vec<(f64, f64)>> =
             vec![vec![(f64::NEG_INFINITY, f64::INFINITY)]; x.ncols()];
 
         let (_, grid_values, y_hat) = compute_initial_values(x, y);
         let residuals = y.to_owned() - &y_hat;
-
         TreeGridFitter {
             splits,
             intervals,
             grid_values,
             leaf_points,
+            leaf_point_counts,
             labels: y,
             x,
             y_hat,
@@ -142,7 +148,7 @@ impl<'a> TreeGridFitter<'a> {
                         let split = self.x[[idx, col]];
                         let slice_candidate =
                             find_slice_candidate(&self.splits, &self.intervals, col, split);
-                        let (err_new, err_old, refine_candidate) = find_refine_candidate(
+                        let refine_candidate_res = find_refine_candidate(
                             slice_candidate,
                             self.x,
                             &self.leaf_points,
@@ -151,11 +157,17 @@ impl<'a> TreeGridFitter<'a> {
                             self.residuals.view(),
                             self.y_hat.view(),
                         );
-
-                        let err_diff = err_old - err_new;
-                        if err_diff > best_err_diff {
-                            best_candidate = Some(refine_candidate);
-                            best_err_diff = err_diff;
+                        match refine_candidate_res {
+                            Ok((err_new, err_old, refine_candidate)) => {
+                                let err_diff = err_old - err_new;
+                                if err_diff > best_err_diff {
+                                    best_candidate = Some(refine_candidate);
+                                    best_err_diff = err_diff;
+                                }
+                            }
+                            Err(msg) => {
+                                println!("Error: {:?}", msg);
+                            }
                         }
                     }
                 }
@@ -170,6 +182,15 @@ impl<'a> TreeGridFitter<'a> {
         }
 
         let err = self.residuals.pow2().mean().unwrap();
+        if hyperparameters.reproject_grid_values {
+            reproject_grid_values(
+                self.x.view(),
+                &self.leaf_points,
+                &mut self.grid_values,
+                self.labels.view(),
+                self.y_hat.view(),
+            );
+        }
         if hyperparameters.identified {
             self.identify_no_sign();
         }
@@ -215,7 +236,8 @@ mod tests {
             &tree_grid.intervals,
             tree_grid.residuals.view(),
             tree_grid.y_hat.view(),
-        );
+        )
+        .unwrap();
         assert_eq!(
             refine_candidate.a_points_idx,
             vec![0, 1, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 19]
@@ -240,6 +262,7 @@ mod tests {
                     tree_grid.residuals.view(),
                     tree_grid.y_hat.view(),
                 )
+                .unwrap()
             };
         let mut tree_grid = TreeGridFitter::new(x.view(), y.view());
         {
