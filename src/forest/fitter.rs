@@ -8,6 +8,7 @@ use crate::{
         },
         TreeGridFamily,
     },
+    grid::params::IdentificationStrategyParams,
     FitResult,
 };
 
@@ -46,8 +47,8 @@ impl MPFBoostedParamsBuilder {
     }
 
     // Convenience methods for nested parameters
-    pub fn B(mut self, B: usize) -> Self {
-        self.tgf_params_builder = self.tgf_params_builder.B(B);
+    pub fn B(mut self, b: usize) -> Self {
+        self.tgf_params_builder = self.tgf_params_builder.B(b);
         self
     }
 
@@ -68,6 +69,16 @@ impl MPFBoostedParamsBuilder {
 
     pub fn identified(mut self, identified: bool) -> Self {
         self.tgf_params_builder = self.tgf_params_builder.identified(identified);
+        self
+    }
+
+    pub fn identification_strategy(
+        mut self,
+        identification_strategy: IdentificationStrategyParams,
+    ) -> Self {
+        self.tgf_params_builder = self
+            .tgf_params_builder
+            .identification_strategy(identification_strategy);
         self
     }
 

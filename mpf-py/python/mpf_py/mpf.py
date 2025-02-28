@@ -84,6 +84,12 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
             plt.show()
 
 
+IDENTIFICATION_STRATEGY_MAP = {
+    "none": 0,
+    "l2_arith_mean": 1,
+    "l2_median": 2,
+}
+
 
 class MPF:
 
@@ -102,10 +108,13 @@ class MPF:
             n_iter: int,
             split_try: int, 
             colsample_bytree: float,
+            identification: str,
             identified: bool = True,
             seed: int = 42
         ) -> tuple["MPF.Boosted", "FitResult"]:
-            mpf_boosted, fr = _MPFBoosted.fit(x, y, epochs, B, n_iter, split_try, colsample_bytree, identified, seed)
+            
+            identification_strategy = IDENTIFICATION_STRATEGY_MAP[identification] or identified # short circuit trick
+            mpf_boosted, fr = _MPFBoosted.fit(x, y, epochs, B, n_iter, split_try, colsample_bytree, identification_strategy, seed)
             instance = cls(mpf_boosted)
             instance._tree_grid_families_lst = [[TreeGrid(tg) for tg in tf.tree_grids] for tf in instance.tree_grid_families]
             return instance, fr

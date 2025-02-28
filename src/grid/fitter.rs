@@ -16,6 +16,8 @@ use crate::grid::strategies::{
 };
 use crate::grid::FittedTreeGrid;
 
+use super::params::IdentificationStrategyParams;
+
 pub fn fit<R: Rng + ?Sized>(
     x: ArrayView2<f64>,
     y: ArrayView1<f64>,
@@ -36,7 +38,18 @@ pub fn fit<R: Rng + ?Sized>(
         },
     };
 
-    fitter.fit(hyperparameters, &split_strategy, rng)
+    let identified = !matches!(
+        hyperparameters.identification_strategy_params,
+        IdentificationStrategyParams::None
+    );
+
+    fitter.fit(
+        hyperparameters.n_iter,
+        hyperparameters.reproject_grid_values,
+        identified,
+        &split_strategy,
+        rng,
+    )
 }
 
 #[derive(Debug)]
@@ -123,7 +136,9 @@ impl<'a> TreeGridFitter<'a> {
 
     fn fit<R, S>(
         mut self,
-        hyperparameters: &TreeGridParams,
+        n_iter: usize,
+        reproject: bool,
+        identified: bool,
         split_strategy: &S,
         rng: &mut R,
     ) -> (FitResult, FittedTreeGrid)
@@ -135,7 +150,7 @@ impl<'a> TreeGridFitter<'a> {
         let n_rows = self.x.nrows();
 
         // Main fitting loop
-        for iter in 0..hyperparameters.n_iter {
+        for iter in 0..n_iter {
             let (curr_it_split_idx, curr_it_col_idx) = split_strategy.sample_splits(rng);
 
             // Select best candidate based on strategy
@@ -157,16 +172,11 @@ impl<'a> TreeGridFitter<'a> {
                             self.residuals.view(),
                             self.y_hat.view(),
                         );
-                        match refine_candidate_res {
-                            Ok((err_new, err_old, refine_candidate)) => {
-                                let err_diff = err_old - err_new;
-                                if err_diff > best_err_diff {
-                                    best_candidate = Some(refine_candidate);
-                                    best_err_diff = err_diff;
-                                }
-                            }
-                            Err(msg) => {
-                                println!("Error: {:?}", msg);
+                        if let Ok((err_new, err_old, refine_candidate)) = refine_candidate_res {
+                            let err_diff = err_old - err_new;
+                            if err_diff > best_err_diff {
+                                best_candidate = Some(refine_candidate);
+                                best_err_diff = err_diff;
                             }
                         }
                     }
@@ -182,7 +192,7 @@ impl<'a> TreeGridFitter<'a> {
         }
 
         let err = self.residuals.pow2().mean().unwrap();
-        if hyperparameters.reproject_grid_values {
+        if reproject {
             reproject_grid_values(
                 self.x.view(),
                 &self.leaf_points,
@@ -191,7 +201,7 @@ impl<'a> TreeGridFitter<'a> {
                 self.y_hat.view(),
             );
         }
-        if hyperparameters.identified {
+        if identified {
             self.identify_no_sign();
         }
 

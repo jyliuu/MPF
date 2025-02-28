@@ -3,8 +3,9 @@ use rand::{Rng, SeedableRng};
 
 use crate::{
     grid::{
-        self, compute_inner_product, get_aligned_signs_for_all_tree_grids,
-        params::{TreeGridParams, TreeGridParamsBuilder},
+        self,
+        params::{IdentificationStrategyParams, TreeGridParams, TreeGridParamsBuilder},
+        strategies::{combine_into_single_tree_grid, L2ArithmeticMean, L2Median},
     },
     FitResult, FittedModel,
 };
@@ -56,10 +57,15 @@ pub fn fit<R: Rng + ?Sized>(
         })
         .collect();
 
-    let combined_tree_grid = if hyperparameters.tg_params.identified {
-        Some(combine_into_single_tree_grid(&tree_grids))
-    } else {
-        None
+    let combined_tree_grid = match tg_params.identification_strategy_params {
+        IdentificationStrategyParams::L2_ARITH_MEAN => Some(combine_into_single_tree_grid(
+            &tree_grids,
+            &L2ArithmeticMean,
+        )),
+        IdentificationStrategyParams::L2_MEDIAN => {
+            Some(combine_into_single_tree_grid(&tree_grids, &L2Median))
+        }
+        _ => None,
     };
     let tgf = TreeGridFamily(tree_grids, BoostedVariant { combined_tree_grid });
     let preds = tgf.predict(x);
@@ -83,82 +89,6 @@ pub struct BoostedVariant {
 
 impl AggregationMethod for BoostedVariant {
     const AGGREGATION_METHOD: Aggregation = Aggregation::Sum;
-}
-
-pub fn combine_into_single_tree_grid(grids: &[FittedTreeGrid]) -> FittedTreeGrid {
-    println!("Combining tree grids into a single tree grid.");
-    let reference = &grids[0];
-
-    let aligned_signs = get_aligned_signs_for_all_tree_grids(grids);
-    let num_axes = reference.splits.len();
-
-    let mut combined_splits: Vec<Vec<f64>> = Vec::with_capacity(num_axes);
-    let mut combined_intervals: Vec<Vec<(f64, f64)>> = Vec::with_capacity(num_axes);
-    let mut combined_grid_values: Vec<Vec<f64>> = Vec::with_capacity(num_axes);
-
-    let scalings: Vec<f64> = grids.iter().map(|grid| grid.scaling).collect();
-    let combined_scaling = scalings.iter().sum::<f64>() / scalings.len() as f64;
-
-    // Process each axis separately.
-    for axis in 0..num_axes {
-        // Collect and deduplicate splits
-        let mut splits: Vec<f64> = grids
-            .iter()
-            .flat_map(|grid| grid.splits[axis].iter().copied()) // Avoid cloning, just copy f64
-            .collect();
-
-        splits.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        splits.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
-
-        // Create new intervals
-        let mut new_intervals: Vec<(f64, f64)> = Vec::new();
-        if splits.is_empty() {
-            new_intervals.push((f64::NEG_INFINITY, f64::INFINITY));
-        } else {
-            new_intervals.push((f64::NEG_INFINITY, splits[0]));
-            for i in 0..splits.len() - 1 {
-                new_intervals.push((splits[i], splits[i + 1]));
-            }
-            new_intervals.push((splits[splits.len() - 1], f64::INFINITY));
-        }
-        combined_intervals.push(new_intervals.clone()); // Store intervals for later use
-
-        // Prepare to collect combined grid values for this axis
-        let mut new_grid_values: Vec<f64> = Vec::with_capacity(new_intervals.len());
-
-        // For each new interval, combine grid values from all treegrids
-        for &(a, b) in &new_intervals {
-            let mut values: Vec<f64> = Vec::with_capacity(grids.len());
-            for (grid_index, grid) in grids.iter().enumerate() {
-                // Efficiently find the grid value for the interval [a, b)
-                for (interval_index, &(ia, ib)) in grid.intervals[axis].iter().enumerate() {
-                    if a >= ia && b <= ib {
-                        values.push(
-                            aligned_signs[grid_index][axis]
-                                * grid.grid_values[axis][interval_index],
-                        );
-                        break; // Move to the next grid after finding a value
-                    }
-                }
-            }
-            // Combine values by taking simple average (handle empty values case)
-            let combined_val = if values.is_empty() {
-                0.0 // Or handle as NaN, or based on domain knowledge
-            } else {
-                values.iter().sum::<f64>() / values.len() as f64
-            };
-            new_grid_values.push(combined_val);
-        }
-        combined_grid_values.push(new_grid_values);
-        combined_splits.push(splits);
-    }
-
-    FittedTreeGrid::new(
-        combined_splits,
-        combined_intervals,
-        combined_grid_values,
-        combined_scaling,
-    )
 }
 
 impl TreeGridFamily<BoostedVariant> {
@@ -189,32 +119,8 @@ impl TreeGridFamily<BoostedVariant> {
         result
     }
 
-    pub fn get_aligned_tree_grids(&self) -> Vec<FittedTreeGrid> {
-        let aligned_signs = get_aligned_signs_for_all_tree_grids(&self.0);
-        self.0
-            .iter()
-            .zip(aligned_signs.iter())
-            .enumerate()
-            .map(|(i, (grid, signs))| {
-                let mut new_grid = grid.clone();
-                let ipr: Vec<f64> = (0..new_grid.grid_values.len())
-                    .map(|dim| compute_inner_product(&new_grid, &self.0[0], dim))
-                    .collect();
-
-                for (axis, sign) in signs.iter().enumerate() {
-                    new_grid.scaling *= sign;
-                    new_grid.grid_values[axis] = new_grid.grid_values[axis]
-                        .iter()
-                        .map(|v| v * sign)
-                        .collect();
-                }
-                new_grid
-            })
-            .collect()
-    }
-
     pub fn combine_into_single_tree_grid(&self) -> FittedTreeGrid {
-        combine_into_single_tree_grid(&self.0)
+        combine_into_single_tree_grid(&self.0, &L2ArithmeticMean)
     }
 }
 
@@ -271,7 +177,20 @@ impl TreeGridFamilyBoostedParamsBuilder {
     }
 
     pub fn identified(mut self, identified: bool) -> Self {
-        self.tg_params_builder = self.tg_params_builder.identified(identified);
+        self.identification_strategy(if identified {
+            IdentificationStrategyParams::L2_ARITH_MEAN
+        } else {
+            IdentificationStrategyParams::None
+        })
+    }
+
+    pub fn identification_strategy(
+        mut self,
+        identification_strategy: IdentificationStrategyParams,
+    ) -> Self {
+        self.tg_params_builder = self
+            .tg_params_builder
+            .identification_strategy(identification_strategy);
         self
     }
 
@@ -302,8 +221,8 @@ mod tests {
 
     use crate::{
         forest::fitter::{fit_boosted, MPFBoostedParams},
-        test_data::setup_data_csv,
         grid::{params::TreeGridParams, FittedTreeGrid},
+        test_data::setup_data_csv,
         FittedModel,
     };
 

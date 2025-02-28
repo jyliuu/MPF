@@ -12,7 +12,7 @@ use mpf::{
         fitter::{fit_boosted, MPFBoostedParamsBuilder},
         mpf::MPF,
     },
-    grid::{self, FittedTreeGrid, TreeGridParamsBuilder},
+    grid::{self, params::IdentificationStrategyParams, FittedTreeGrid, TreeGridParamsBuilder},
     FitResult, FittedModel,
 };
 
@@ -88,17 +88,6 @@ impl TreeGridFamilyBoostedPy {
         Ok(TreeGridPy::from(combined_tree_grid))
     }
 
-    #[getter]
-    pub fn get_aligned_tree_grids<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let aligned_tree_grids = self.0.get_aligned_tree_grids();
-        let aligned_tree_grids_py: Vec<TreeGridPy> = aligned_tree_grids
-            .iter()
-            .map(|tg| TreeGridPy::from(tg.clone()))
-            .collect();
-
-        PyList::new(py, aligned_tree_grids_py)
-    }
-
     #[pyo3(name = "predict")]
     pub fn _predict<'py>(
         &self,
@@ -158,7 +147,7 @@ impl MPFBoostedPy {
         n_iter: usize,
         split_try: usize,
         colsample_bytree: f64,
-        identified: bool,
+        identification: u8,
         seed: u64,
     ) -> PyResult<(MPFBoostedPy, FitResultPy)> {
         let x = x.as_array();
@@ -171,9 +160,14 @@ impl MPFBoostedPy {
             .n_iter(n_iter)
             .split_try(split_try)
             .colsample_bytree(colsample_bytree)
-            .identified(identified)
-            .seed(seed)
-            .build();
+            .seed(seed);
+
+        let params =match identification {
+            1 => params.identification_strategy(IdentificationStrategyParams::L2_ARITH_MEAN),
+            2 => params.identification_strategy(IdentificationStrategyParams::L2_MEDIAN),
+            _ => params.identification_strategy(IdentificationStrategyParams::None),
+        };
+        let params = params.build();
 
         let (fit_result, mpf) = fit_boosted(x, y, &params);
         Ok((mpf.into(), FitResultPy::from(fit_result)))

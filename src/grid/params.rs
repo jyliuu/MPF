@@ -7,19 +7,19 @@ pub enum SplitStrategyParams {
     // Add other strategies here as needed
 }
 
-#[derive(Debug, Clone)]
-pub enum CandidateStrategyParams {
-    GreedySelection,
-    // Add other strategies here as needed
+#[derive(Debug, Clone, PartialEq)]
+pub enum IdentificationStrategyParams {
+    L2_ARITH_MEAN,
+    L2_MEDIAN,
+    None,
 }
 
 #[derive(Debug, Clone)]
 pub struct TreeGridParams {
     pub n_iter: usize,
     pub split_strategy_params: SplitStrategyParams,
-    pub candidate_strategy_params: CandidateStrategyParams,
-    pub identified: bool,
     pub reproject_grid_values: bool,
+    pub identification_strategy_params: IdentificationStrategyParams,
 }
 
 // Builder for TreeGridParams
@@ -28,8 +28,7 @@ pub struct TreeGridParamsBuilder {
     n_iter: usize,
     split_try: usize,
     colsample_bytree: f64,
-    candidate_strategy_params: CandidateStrategyParams,
-    identified: bool,
+    identification_strategy_params: IdentificationStrategyParams,
     reproject_grid_values: bool,
 }
 
@@ -39,8 +38,7 @@ impl TreeGridParamsBuilder {
             n_iter: 25,
             split_try: 10,
             colsample_bytree: 1.0,
-            candidate_strategy_params: CandidateStrategyParams::GreedySelection,
-            identified: true,
+            identification_strategy_params: IdentificationStrategyParams::L2_ARITH_MEAN,
             reproject_grid_values: true,
         }
     }
@@ -60,13 +58,17 @@ impl TreeGridParamsBuilder {
         self
     }
 
-    pub fn candidate_strategy_params(mut self, strategy: CandidateStrategyParams) -> Self {
-        self.candidate_strategy_params = strategy;
+    pub fn identified(mut self, identified: bool) -> Self {
+        self.identification_strategy_params = if identified {
+            IdentificationStrategyParams::L2_ARITH_MEAN
+        } else {
+            IdentificationStrategyParams::None
+        };
         self
     }
 
-    pub fn identified(mut self, identified: bool) -> Self {
-        self.identified = identified;
+    pub fn identification_strategy(mut self, strategy: IdentificationStrategyParams) -> Self {
+        self.identification_strategy_params = strategy;
         self
     }
 
@@ -82,8 +84,7 @@ impl TreeGridParamsBuilder {
                 split_try: self.split_try,
                 colsample_bytree: self.colsample_bytree,
             },
-            candidate_strategy_params: self.candidate_strategy_params,
-            identified: self.identified,
+            identification_strategy_params: self.identification_strategy_params,
             reproject_grid_values: self.reproject_grid_values,
         }
     }
@@ -103,8 +104,7 @@ impl Default for TreeGridParams {
                 split_try: 10,
                 colsample_bytree: 1.0,
             },
-            candidate_strategy_params: CandidateStrategyParams::GreedySelection,
-            identified: true,
+            identification_strategy_params: IdentificationStrategyParams::L2_ARITH_MEAN,
             reproject_grid_values: true,
         }
     }
