@@ -128,7 +128,7 @@ pub fn fit_boosted(
 mod tests {
     use crate::{
         family::boosted::TreeGridFamilyBoostedParams,
-        forest::forest_fitter::{fit_boosted, MPFBoostedParams, MPFBoostedParamsBuilder},
+        forest::fitter::{fit_boosted, MPFBoostedParams, MPFBoostedParamsBuilder},
         test_data::setup_data_csv,
         FittedModel,
     };
@@ -243,11 +243,14 @@ mod tests {
         // Use builder pattern for cleaner parameter construction
         let params = MPFBoostedParamsBuilder::new()
             .epochs(6)
-            .B(44)
-            .n_iter(25) // Using default, but explicitly stated for clarity
+            .B(70)
+            .n_iter(13) // Using default, but explicitly stated for clarity
             .build();
 
         let (fit_result, model) = fit_boosted(x.view(), y.view(), &params);
+        // for tgf in model.get_tree_grid_families() {
+        //     tgf.get_tree_grids().iter().for_each(|tg| println!("{:?}", tg.scaling));
+        // }
         let preds = model.predict(x.view());
         println!("Error: {:?}", fit_result.err);
         assert!(fit_result.err < 0.7);

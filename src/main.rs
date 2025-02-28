@@ -2,7 +2,7 @@ use std::{ops::Div, time::SystemTime};
 
 use mpf::{
     family::boosted::TreeGridFamilyBoostedParams,
-    forest::forest_fitter::{fit_boosted, MPFBoostedParams},
+    forest::fitter::{fit_boosted, MPFBoostedParams},
     grid::params::TreeGridParams,
     FittedModel,
 };

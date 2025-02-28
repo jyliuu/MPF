@@ -1,2 +1,2 @@
-pub mod forest_fitter;
+pub mod fitter;
 pub mod mpf;

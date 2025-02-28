@@ -9,7 +9,7 @@ use numpy::{PyArray1, ToPyArray};
 use mpf::{
     family::{boosted::BoostedVariant, TreeGridFamily},
     forest::{
-        forest_fitter::{fit_boosted, MPFBoostedParamsBuilder},
+        fitter::{fit_boosted, MPFBoostedParamsBuilder},
         mpf::MPF,
     },
     grid::{self, FittedTreeGrid, TreeGridParamsBuilder},

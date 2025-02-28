@@ -301,7 +301,7 @@ mod tests {
     use ndarray::Array1;
 
     use crate::{
-        forest::forest_fitter::{fit_boosted, MPFBoostedParams},
+        forest::fitter::{fit_boosted, MPFBoostedParams},
         test_data::setup_data_csv,
         grid::{params::TreeGridParams, FittedTreeGrid},
         FittedModel,
