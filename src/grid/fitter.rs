@@ -198,7 +198,7 @@ impl<'a> TreeGridFitter<'a> {
                 &self.leaf_points,
                 &mut self.grid_values,
                 self.labels.view(),
-                self.y_hat.view(),
+                self.y_hat.view_mut(),
             );
         }
         if identified {

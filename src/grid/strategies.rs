@@ -1,4 +1,4 @@
-use ndarray::{Array1, Array2, ArrayView1, ArrayView2, Axis};
+use ndarray::{Array1, Array2, ArrayView1, ArrayView2, ArrayViewMut1, Axis};
 use rand::{seq::index::sample, Rng};
 
 use super::FittedTreeGrid;
@@ -129,10 +129,9 @@ pub fn reproject_grid_values(
     leaf_points: &Array2<usize>,
     grid_values: &mut [Vec<f64>],
     labels: ArrayView1<'_, f64>,
-    y_hat: ArrayView1<'_, f64>,
+    mut y_hat: ArrayViewMut1<'_, f64>,
 ) {
-    let mut y_hat_clone = y_hat.to_owned();
-    let mut residuals = labels.to_owned() - &y_hat_clone;
+    let mut residuals = labels.to_owned() - &y_hat;
     let mut err = residuals.pow2().sum();
     for i in 0..MAX_PROJECTION_ITER {
         for (dim, curr_grid_values) in grid_values.iter_mut().enumerate() {
@@ -143,7 +142,7 @@ pub fn reproject_grid_values(
                     .filter(|(_, &x)| x == idx)
                     .map(|(i, _)| i)
                     .collect();
-                let curr_y_hat = y_hat_clone.select(Axis(0), &curr_leaf_points_idx);
+                let curr_y_hat = y_hat.select(Axis(0), &curr_leaf_points_idx);
                 let curr_residuals = residuals.select(Axis(0), &curr_leaf_points_idx);
 
                 let numerator = curr_residuals
@@ -157,8 +156,8 @@ pub fn reproject_grid_values(
                 *x *= v_hat;
 
                 for i in &curr_leaf_points_idx {
-                    y_hat_clone[*i] *= v_hat;
-                    residuals[*i] = labels[*i] - y_hat_clone[*i];
+                    y_hat[*i] *= v_hat;
+                    residuals[*i] = labels[*i] - y_hat[*i];
                 }
             }
         }
