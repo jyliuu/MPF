@@ -21,7 +21,11 @@ pub fn fit<R: Rng + ?Sized>(
     hyperparameters: &TreeGridFamilyBoostedParams,
     rng: &mut R,
 ) -> (FitResult, TreeGridFamily<BoostedVariant>) {
-    let TreeGridFamilyBoostedParams { B, tg_params } = hyperparameters;
+    let TreeGridFamilyBoostedParams {
+        B,
+        bootstrap,
+        tg_params,
+    } = hyperparameters;
     let n = x.nrows();
 
     // Pre-generate seeds for each thread
@@ -32,11 +36,16 @@ pub fn fit<R: Rng + ?Sized>(
         .iter()
         .map(|&seed| {
             let mut thread_rng = rand::rngs::StdRng::seed_from_u64(seed);
-            let sample_indices: Vec<usize> = (0..n).map(|_| thread_rng.gen_range(0..n)).collect();
-            let x_sample = x.select(ndarray::Axis(0), &sample_indices);
-            let y_sample = y.select(ndarray::Axis(0), &sample_indices);
-            let (fit_res, tg) =
-                grid::fitter::fit(x_sample.view(), y_sample.view(), tg_params, &mut thread_rng);
+            let (fit_res, tg) = if *bootstrap {
+                let sample_indices: Vec<usize> =
+                    (0..n).map(|_| thread_rng.gen_range(0..n)).collect();
+                let x_sample = x.select(ndarray::Axis(0), &sample_indices);
+                let y_sample = y.select(ndarray::Axis(0), &sample_indices);
+
+                grid::fitter::fit(x_sample.view(), y_sample.view(), tg_params, &mut thread_rng)
+            } else {
+                grid::fitter::fit(x.view(), y.view(), tg_params, &mut thread_rng)
+            };
             println!("err: {:?}", fit_res.err);
             tg
         })
@@ -47,11 +56,16 @@ pub fn fit<R: Rng + ?Sized>(
         .into_par_iter()
         .map(|seed| {
             let mut thread_rng = rand::rngs::StdRng::seed_from_u64(seed);
-            let sample_indices: Vec<usize> = (0..n).map(|_| thread_rng.gen_range(0..n)).collect();
-            let x_sample = x.select(ndarray::Axis(0), &sample_indices);
-            let y_sample = y.select(ndarray::Axis(0), &sample_indices);
-            let (fit_res, tg) =
-                grid::fitter::fit(x_sample.view(), y_sample.view(), tg_params, &mut thread_rng);
+            let (fit_res, tg) = if *bootstrap {
+                let sample_indices: Vec<usize> =
+                    (0..n).map(|_| thread_rng.gen_range(0..n)).collect();
+                let x_sample = x.select(ndarray::Axis(0), &sample_indices);
+                let y_sample = y.select(ndarray::Axis(0), &sample_indices);
+
+                grid::fitter::fit(x_sample.view(), y_sample.view(), tg_params, &mut thread_rng)
+            } else {
+                grid::fitter::fit(x.view(), y.view(), tg_params, &mut thread_rng)
+            };
             println!("err: {:?}", fit_res.err);
             tg
         })
@@ -137,6 +151,7 @@ impl FittedModel for TreeGridFamily<BoostedVariant> {
 #[derive(Debug)]
 pub struct TreeGridFamilyBoostedParams {
     pub B: usize,
+    pub bootstrap: bool,
     pub tg_params: TreeGridParams,
 }
 
@@ -144,6 +159,7 @@ pub struct TreeGridFamilyBoostedParams {
 #[derive(Debug)]
 pub struct TreeGridFamilyBoostedParamsBuilder {
     B: usize,
+    bootstrap: bool,
     tg_params_builder: TreeGridParamsBuilder,
 }
 
@@ -151,12 +167,18 @@ impl TreeGridFamilyBoostedParamsBuilder {
     pub fn new() -> Self {
         Self {
             B: 100,
+            bootstrap: false,
             tg_params_builder: TreeGridParamsBuilder::new(),
         }
     }
 
     pub fn B(mut self, B: usize) -> Self {
         self.B = B;
+        self
+    }
+
+    pub fn bootstrap(mut self, bootstrap: bool) -> Self {
+        self.bootstrap = bootstrap;
         self
     }
 
@@ -197,6 +219,7 @@ impl TreeGridFamilyBoostedParamsBuilder {
     pub fn build(self) -> TreeGridFamilyBoostedParams {
         TreeGridFamilyBoostedParams {
             B: self.B,
+            bootstrap: self.bootstrap,
             tg_params: self.tg_params_builder.build(),
         }
     }
@@ -240,6 +263,7 @@ mod tests {
                 seed: 42,
                 tgf_params: TreeGridFamilyBoostedParams {
                     B: 20,
+                    bootstrap: false,
                     tg_params: TreeGridParams::default(),
                 },
             },
