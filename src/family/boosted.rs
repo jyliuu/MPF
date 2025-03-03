@@ -4,7 +4,7 @@ use rand::{Rng, SeedableRng};
 use crate::{
     grid::{
         self,
-        params::{IdentificationStrategyParams, TreeGridParams, TreeGridParamsBuilder},
+        params::{IdentificationStrategyParams, SplitStrategyParams, TreeGridParams, TreeGridParamsBuilder},
         strategies::{combine_into_single_tree_grid, L2ArithmeticMean, L2Median},
     },
     FitResult, FittedModel,
@@ -188,15 +188,11 @@ impl TreeGridFamilyBoostedParamsBuilder {
         self
     }
 
-    pub fn split_try(mut self, split_try: usize) -> Self {
-        self.tg_params_builder = self.tg_params_builder.split_try(split_try);
+    pub fn split_strategy(mut self, strategy: SplitStrategyParams) -> Self {
+        self.tg_params_builder = self.tg_params_builder.split_strategy(strategy);
         self
     }
 
-    pub fn colsample_bytree(mut self, colsample_bytree: f64) -> Self {
-        self.tg_params_builder = self.tg_params_builder.colsample_bytree(colsample_bytree);
-        self
-    }
 
     pub fn identified(mut self, identified: bool) -> Self {
         self.identification_strategy(if identified {

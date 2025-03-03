@@ -1,18 +1,8 @@
+use itertools::Itertools;
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, ArrayViewMut1, Axis};
 use rand::{seq::index::sample, Rng};
 
-use super::FittedTreeGrid;
-
-pub trait SplitStrategy {
-    fn sample_splits<R: Rng + ?Sized>(&self, rng: &mut R) -> (Vec<usize>, Vec<usize>);
-}
-#[derive(Debug, Clone)]
-pub struct RandomSplit {
-    pub split_try: usize,
-    pub ncols_to_sample: usize,
-    pub nrows: usize,
-    pub ncols: usize,
-}
+use super::{FittedTreeGrid, TreeGridFitter};
 
 pub trait IdentificationStrategy: Send + Sync + 'static {
     fn identify(&self, grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64);
@@ -82,15 +72,83 @@ impl IdentificationStrategy for L2Median {
     }
 }
 
-impl SplitStrategy for RandomSplit {
-    fn sample_splits<R: Rng + ?Sized>(&self, rng: &mut R) -> (Vec<usize>, Vec<usize>) {
-        let split_idx: Vec<usize> = sample(rng, self.nrows, self.split_try)
-            .into_iter()
-            .collect();
-        let col_idx: Vec<usize> = sample(rng, self.ncols, self.ncols_to_sample)
-            .into_iter()
-            .collect();
-        (split_idx, col_idx)
+pub enum SplitStrategy {
+    Random(RandomSplit),
+    Interval(IntervalRandomSplit),
+}
+
+impl SplitStrategy {
+    pub fn sample_splits<R: Rng + ?Sized>(
+        &self,
+        rng: &mut R,
+        tree_grid_fitter: &TreeGridFitter,
+    ) -> Vec<(usize, f64)> {
+        match self {
+            SplitStrategy::Random(random_split) => {
+                random_split.sample_splits(rng, tree_grid_fitter)
+            }
+            SplitStrategy::Interval(interval_split) => {
+                interval_split.sample_splits(rng, tree_grid_fitter)
+            }
+        }
+    }
+}
+#[derive(Debug, Clone)]
+pub struct RandomSplit {
+    pub split_try: usize,
+    pub colsample_bytree: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct IntervalRandomSplit {
+    pub split_try: usize,
+    pub colsample_bytree: f64,
+}
+
+impl RandomSplit {
+    fn sample_splits<R: Rng + ?Sized>(
+        &self,
+        rng: &mut R,
+        tree_grid_fitter: &TreeGridFitter,
+    ) -> Vec<(usize, f64)> {
+        let x = tree_grid_fitter.x.view();
+        let nrows = x.nrows();
+        let ncols = x.ncols();
+        let ncols_to_sample = (self.colsample_bytree * ncols as f64) as usize;
+
+        let mut splits = vec![];
+
+        for col in sample(rng, ncols, ncols_to_sample) {
+            for idx in sample(rng, nrows, self.split_try) {
+                splits.push((col, x[[idx, col]]));
+            }
+        }
+
+        splits
+    }
+}
+
+impl IntervalRandomSplit {
+    fn sample_splits<R: Rng + ?Sized>(
+        &self,
+        rng: &mut R,
+        tree_grid_fitter: &TreeGridFitter,
+    ) -> Vec<(usize, f64)> {
+        let ncols = tree_grid_fitter.x.ncols();
+        let ncols_to_sample = (self.colsample_bytree * ncols as f64) as usize;
+
+        let cols = sample(rng, ncols, ncols_to_sample);
+
+        let mut splits = vec![];
+        for col in cols {
+            let intervals = &tree_grid_fitter.intervals[col];
+            for (a, b) in intervals {
+                for _ in 0..self.split_try {
+                    splits.push((col, rng.gen_range(*a..*b)));
+                }
+            }
+        }
+        splits
     }
 }
 

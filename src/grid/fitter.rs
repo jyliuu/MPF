@@ -17,6 +17,7 @@ use crate::grid::strategies::{
 use crate::grid::FittedTreeGrid;
 
 use super::params::IdentificationStrategyParams;
+use super::strategies::IntervalRandomSplit;
 
 pub fn fit<R: Rng + ?Sized>(
     x: ArrayView2<f64>,
@@ -30,12 +31,17 @@ pub fn fit<R: Rng + ?Sized>(
         SplitStrategyParams::RandomSplit {
             split_try,
             colsample_bytree,
-        } => RandomSplit {
+        } => SplitStrategy::Random(RandomSplit {
             split_try,
-            ncols_to_sample: (colsample_bytree * x.ncols() as f64) as usize,
-            nrows: x.nrows(),
-            ncols: x.ncols(),
-        },
+            colsample_bytree,
+        }),
+        SplitStrategyParams::IntervalRandomSplit {
+            split_try,
+            colsample_bytree,
+        } => SplitStrategy::Interval(IntervalRandomSplit {
+            split_try,
+            colsample_bytree,
+        }),
     };
 
     let identified = !matches!(
@@ -134,50 +140,43 @@ impl<'a> TreeGridFitter<'a> {
         }
     }
 
-    fn fit<R, S>(
+    fn fit<R: Rng + ?Sized>(
         mut self,
         n_iter: usize,
         reproject: bool,
         identified: bool,
-        split_strategy: &S,
+        split_strategy: &SplitStrategy,
         rng: &mut R,
-    ) -> (FitResult, FittedTreeGrid)
-    where
-        R: Rng + ?Sized,
-        S: SplitStrategy,
-    {
+    ) -> (FitResult, FittedTreeGrid) {
         let n_cols = self.x.ncols();
         let n_rows = self.x.nrows();
 
         // Main fitting loop
         for iter in 0..n_iter {
-            let (curr_it_split_idx, curr_it_col_idx) = split_strategy.sample_splits(rng);
-
+            let splits = split_strategy.sample_splits(rng, &self);
+            println!("Trying {} splits", splits.len());
             // Select best candidate based on strategy
             let best_candidate = {
                 let mut best_candidate = None;
                 let mut best_err_diff = f64::NEG_INFINITY;
 
-                for &col in &curr_it_col_idx {
-                    for &idx in &curr_it_split_idx {
-                        let split = self.x[[idx, col]];
-                        let slice_candidate =
-                            find_slice_candidate(&self.splits, &self.intervals, col, split);
-                        let refine_candidate_res = find_refine_candidate(
-                            slice_candidate,
-                            self.x,
-                            &self.leaf_points,
-                            &self.grid_values,
-                            &self.intervals,
-                            self.residuals.view(),
-                            self.y_hat.view(),
-                        );
-                        if let Ok((err_new, err_old, refine_candidate)) = refine_candidate_res {
-                            let err_diff = err_old - err_new;
-                            if err_diff > best_err_diff {
-                                best_candidate = Some(refine_candidate);
-                                best_err_diff = err_diff;
-                            }
+                for (col, split) in splits {
+                    let slice_candidate =
+                        find_slice_candidate(&self.splits, &self.intervals, col, split);
+                    let refine_candidate_res = find_refine_candidate(
+                        slice_candidate,
+                        self.x,
+                        &self.leaf_points,
+                        &self.grid_values,
+                        &self.intervals,
+                        self.residuals.view(),
+                        self.y_hat.view(),
+                    );
+                    if let Ok((err_new, err_old, refine_candidate)) = refine_candidate_res {
+                        let err_diff = err_old - err_new;
+                        if err_diff > best_err_diff {
+                            best_candidate = Some(refine_candidate);
+                            best_err_diff = err_diff;
                         }
                     }
                 }

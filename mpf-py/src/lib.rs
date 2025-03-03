@@ -12,7 +12,11 @@ use mpf::{
         fitter::{fit_boosted, MPFBoostedParamsBuilder},
         mpf::MPF,
     },
-    grid::{self, params::IdentificationStrategyParams, FittedTreeGrid, TreeGridParamsBuilder},
+    grid::{
+        self,
+        params::{IdentificationStrategyParams, SplitStrategyParams},
+        FittedTreeGrid, TreeGridParamsBuilder,
+    },
     FitResult, FittedModel,
 };
 
@@ -158,11 +162,13 @@ impl MPFBoostedPy {
             .epochs(epochs)
             .B(B)
             .n_iter(n_iter)
-            .split_try(split_try)
-            .colsample_bytree(colsample_bytree)
+            .split_strategy(SplitStrategyParams::RandomSplit {
+                split_try,
+                colsample_bytree,
+            })
             .seed(seed);
 
-        let params =match identification {
+        let params = match identification {
             1 => params.identification_strategy(IdentificationStrategyParams::L2_ARITH_MEAN),
             2 => params.identification_strategy(IdentificationStrategyParams::L2_MEDIAN),
             _ => params.identification_strategy(IdentificationStrategyParams::None),
@@ -226,8 +232,10 @@ impl TreeGridPy {
         let y = y.as_array();
         let params = TreeGridParamsBuilder::new()
             .n_iter(n_iter)
-            .split_try(split_try)
-            .colsample_bytree(colsample_bytree)
+            .split_strategy(SplitStrategyParams::RandomSplit {
+                split_try,
+                colsample_bytree,
+            })
             .identified(identified)
             .build();
         let mut rng = StdRng::seed_from_u64(seed);

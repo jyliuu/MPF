@@ -8,7 +8,7 @@ use crate::{
         },
         TreeGridFamily,
     },
-    grid::params::IdentificationStrategyParams,
+    grid::params::{IdentificationStrategyParams, SplitStrategyParams},
     FitResult,
 };
 
@@ -57,13 +57,8 @@ impl MPFBoostedParamsBuilder {
         self
     }
 
-    pub fn split_try(mut self, split_try: usize) -> Self {
-        self.tgf_params_builder = self.tgf_params_builder.split_try(split_try);
-        self
-    }
-
-    pub fn colsample_bytree(mut self, colsample_bytree: f64) -> Self {
-        self.tgf_params_builder = self.tgf_params_builder.colsample_bytree(colsample_bytree);
+    pub fn split_strategy(mut self, strategy: SplitStrategyParams) -> Self {
+        self.tgf_params_builder = self.tgf_params_builder.split_strategy(strategy);
         self
     }
 
