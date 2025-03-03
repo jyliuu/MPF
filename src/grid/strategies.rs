@@ -130,8 +130,8 @@ pub fn reproject_grid_values(
     grid_values: &mut [Vec<f64>],
     labels: ArrayView1<'_, f64>,
     mut y_hat: ArrayViewMut1<'_, f64>,
+    mut residuals: ArrayViewMut1<'_, f64>,
 ) {
-    let mut residuals = labels.to_owned() - &y_hat;
     let mut err = residuals.pow2().sum();
     for i in 0..MAX_PROJECTION_ITER {
         for (dim, curr_grid_values) in grid_values.iter_mut().enumerate() {

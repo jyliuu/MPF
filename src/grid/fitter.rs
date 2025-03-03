@@ -111,7 +111,7 @@ impl TreeGridFitter<'_> {
 }
 
 impl<'a> TreeGridFitter<'a> {
-    fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
+    pub fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
         let leaf_points = Array2::zeros((x.nrows(), x.ncols()));
         let leaf_point_counts = vec![vec![x.nrows()]; x.ncols()];
         let splits = vec![vec![]; x.ncols()];
@@ -191,7 +191,6 @@ impl<'a> TreeGridFitter<'a> {
             }
         }
 
-        let err = self.residuals.pow2().mean().unwrap();
         if reproject {
             reproject_grid_values(
                 self.x.view(),
@@ -199,6 +198,7 @@ impl<'a> TreeGridFitter<'a> {
                 &mut self.grid_values,
                 self.labels.view(),
                 self.y_hat.view_mut(),
+                self.residuals.view_mut(),
             );
         }
         if identified {
@@ -207,6 +207,7 @@ impl<'a> TreeGridFitter<'a> {
 
         let residuals = self.residuals;
         let y_hat = self.y_hat;
+        let err = residuals.pow2().mean().unwrap();
 
         let tree_grid =
             FittedTreeGrid::new(self.splits, self.intervals, self.grid_values, self.scaling);
