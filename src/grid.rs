@@ -1,14 +1,15 @@
+use fitter::TreeGridFitter;
+use gridindex::GridIndex;
 use ndarray::{Array1, ArrayView2, Axis};
 
 use crate::FittedModel;
 
 pub mod candidates;
 pub mod fitter;
+mod gridindex;
 pub mod params;
 pub mod strategies;
 
-// Re-export TreeGridFitter for backward compatibility
-pub use fitter::TreeGridFitter;
 // Re-export TreeGridParams and related types
 pub use params::{TreeGridParams, TreeGridParamsBuilder};
 
@@ -86,37 +87,20 @@ impl DimensionGrid {
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct FittedTreeGrid {
-    pub splits: Vec<Vec<f64>>,
-    pub intervals: Vec<Vec<(f64, f64)>>,
     pub grid_values: Vec<Vec<f64>>,
     pub scaling: f64,
     // Add dimension_grids for faster lookups
-    pub dimension_grids: Vec<DimensionGrid>,
+    pub grid_index: GridIndex,
 }
 
 impl FittedTreeGrid {
-    pub fn new(
-        splits: Vec<Vec<f64>>,
-        intervals: Vec<Vec<(f64, f64)>>,
-        grid_values: Vec<Vec<f64>>,
-        scaling: f64,
-    ) -> Self {
-        // Create dimension grids for efficient access
-        let dimension_grids = splits
-            .iter()
-            .zip(grid_values.iter())
-            .map(|(split, values)| DimensionGrid::new(split.clone(), values.clone()))
-            .collect();
-
+    pub fn new(grid_values: Vec<Vec<f64>>, scaling: f64, grid_index: GridIndex) -> Self {
         Self {
-            splits,
-            intervals,
             grid_values,
             scaling,
-            dimension_grids,
+            grid_index,
         }
     }
 
@@ -125,15 +109,16 @@ impl FittedTreeGrid {
     pub fn predict_single(&self, x: &[f64]) -> f64 {
         debug_assert_eq!(
             x.len(),
-            self.dimension_grids.len(),
+            self.grid_index.current_dims().len(),
             "Input dimension must match tree grid dimension"
         );
 
         let mut product = 1.0;
 
         // Use dimension grid for faster lookups
-        for (i, grid) in self.dimension_grids.iter().enumerate() {
-            product *= grid.get_value_for(x[i]);
+        for (i, val) in x.iter().enumerate() {
+            let col_idx = self.grid_index.compute_col_index_for_point(i, *val);
+            product *= self.grid_values[i][col_idx];
         }
 
         self.scaling * product
@@ -155,19 +140,10 @@ impl FittedModel for FittedTreeGrid {
 
 impl<'a> From<TreeGridFitter<'a>> for FittedTreeGrid {
     fn from(fitter: TreeGridFitter<'a>) -> Self {
-        let dimension_grids = fitter
-            .splits
-            .iter()
-            .zip(fitter.grid_values.iter())
-            .map(|(split, values)| DimensionGrid::new(split.clone(), values.clone()))
-            .collect();
-
         Self {
-            splits: fitter.splits,
-            intervals: fitter.intervals,
             grid_values: fitter.grid_values,
             scaling: fitter.scaling,
-            dimension_grids,
+            grid_index: fitter.grid_index,
         }
     }
 }
@@ -175,7 +151,10 @@ impl<'a> From<TreeGridFitter<'a>> for FittedTreeGrid {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{grid::params::IdentificationStrategyParams, test_data::setup_data_csv};
+    use crate::{
+        grid::params::{IdentificationStrategyParams, SplitStrategyParams},
+        test_data::setup_data_csv,
+    };
     use rand::{rngs::StdRng, SeedableRng};
 
     #[test]
@@ -183,6 +162,27 @@ mod tests {
         let (x, y) = setup_data_csv();
         let mut rng = StdRng::seed_from_u64(42);
         let hyperparameters = TreeGridParams::default();
+        let (fit_result, _) = fitter::fit(x.view(), y.view(), &hyperparameters, &mut rng);
+        let mean = y.mean().unwrap();
+        let base_err = (y - mean).powi(2).mean().unwrap();
+        println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
+        assert!(
+            fit_result.err < base_err,
+            "Error is not less than mean error"
+        );
+    }
+
+    #[test]
+    fn test_model_fit_interval_split() {
+        let (x, y) = setup_data_csv();
+        let mut rng = StdRng::seed_from_u64(42);
+        let hyperparameters = TreeGridParamsBuilder::new()
+            .n_iter(24)
+            .split_strategy(SplitStrategyParams::IntervalRandomSplit {
+                split_try: 3,
+                colsample_bytree: 1.0,
+            })
+            .build();
         let (fit_result, _) = fitter::fit(x.view(), y.view(), &hyperparameters, &mut rng);
         let mean = y.mean().unwrap();
         let base_err = (y - mean).powi(2).mean().unwrap();

@@ -1,9 +1,7 @@
 use std::{ops::Div, time::SystemTime};
 
 use mpf::{
-    family::boosted::TreeGridFamilyBoostedParams,
-    forest::fitter::{fit_boosted, MPFBoostedParams},
-    grid::params::TreeGridParams,
+    forest::fitter::{fit_boosted, MPFBoostedParamsBuilder},
     FittedModel,
 };
 use ndarray::s;
@@ -32,14 +30,7 @@ fn main() {
     let y_test = y.slice(s![n / 2..]);
 
     let start = SystemTime::now();
-    let params = MPFBoostedParams {
-        epochs: 50,
-        tgf_params: TreeGridFamilyBoostedParams {
-            B: 10,
-            tg_params: TreeGridParams::default(),
-        },
-        seed: 42,
-    };
+    let params = MPFBoostedParamsBuilder::new().build();
 
     let (fr, model) = fit_boosted(x_train.view(), y_train.view(), &params);
     let elapsed = start.elapsed().unwrap();

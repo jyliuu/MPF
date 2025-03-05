@@ -1,8 +1,8 @@
 use itertools::Itertools;
-use ndarray::{Array1, Array2, ArrayView1, ArrayView2, ArrayViewMut1, Axis};
+use ndarray::{Array1, ArrayView1, ArrayView2, ArrayViewMut1};
 use rand::{seq::index::sample, Rng};
 
-use super::{FittedTreeGrid, TreeGridFitter};
+use super::{gridindex::GridIndex, FittedTreeGrid};
 
 pub trait IdentificationStrategy: Send + Sync + 'static {
     fn identify(&self, grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64);
@@ -81,14 +81,13 @@ impl SplitStrategy {
     pub fn sample_splits<R: Rng + ?Sized>(
         &self,
         rng: &mut R,
-        tree_grid_fitter: &TreeGridFitter,
+        x: ArrayView2<f64>,
+        intervals: &[Vec<(f64, f64)>],
     ) -> Vec<(usize, f64)> {
         match self {
-            SplitStrategy::Random(random_split) => {
-                random_split.sample_splits(rng, tree_grid_fitter)
-            }
+            SplitStrategy::Random(random_split) => random_split.sample_splits(rng, x),
             SplitStrategy::Interval(interval_split) => {
-                interval_split.sample_splits(rng, tree_grid_fitter)
+                interval_split.sample_splits(rng, x, intervals)
             }
         }
     }
@@ -106,12 +105,7 @@ pub struct IntervalRandomSplit {
 }
 
 impl RandomSplit {
-    fn sample_splits<R: Rng + ?Sized>(
-        &self,
-        rng: &mut R,
-        tree_grid_fitter: &TreeGridFitter,
-    ) -> Vec<(usize, f64)> {
-        let x = tree_grid_fitter.x.view();
+    fn sample_splits<R: Rng + ?Sized>(&self, rng: &mut R, x: ArrayView2<f64>) -> Vec<(usize, f64)> {
         let nrows = x.nrows();
         let ncols = x.ncols();
         let ncols_to_sample = (self.colsample_bytree * ncols as f64) as usize;
@@ -132,19 +126,37 @@ impl IntervalRandomSplit {
     fn sample_splits<R: Rng + ?Sized>(
         &self,
         rng: &mut R,
-        tree_grid_fitter: &TreeGridFitter,
+        x: ArrayView2<f64>,
+        intervals: &[Vec<(f64, f64)>],
     ) -> Vec<(usize, f64)> {
-        let ncols = tree_grid_fitter.x.ncols();
+        let ncols = x.ncols();
         let ncols_to_sample = (self.colsample_bytree * ncols as f64) as usize;
 
         let cols = sample(rng, ncols, ncols_to_sample);
 
         let mut splits = vec![];
         for col in cols {
-            let intervals = &tree_grid_fitter.intervals[col];
+            let intervals = &intervals[col];
             for (a, b) in intervals {
+                let a = if a.is_infinite() {
+                    *x.column(col)
+                        .iter()
+                        .min_by(|a, b| a.partial_cmp(b).unwrap())
+                        .unwrap()
+                } else {
+                    *a
+                };
+                let b = if b.is_infinite() {
+                    *x.column(col)
+                        .iter()
+                        .max_by(|a, b| a.partial_cmp(b).unwrap())
+                        .unwrap()
+                } else {
+                    *b
+                };
+
                 for _ in 0..self.split_try {
-                    splits.push((col, rng.gen_range(*a..*b)));
+                    splits.push((col, rng.gen_range(a..b)));
                 }
             }
         }
@@ -165,62 +177,67 @@ pub fn compute_initial_values(
     (mean, grid_values, y_hat)
 }
 
-pub fn get_component_weights(
-    leaf_points: &Array2<usize>,
-    grid_values: &[Vec<f64>],
-) -> Vec<Vec<f64>> {
-    let mut weights: Vec<Vec<f64>> = grid_values.iter().map(|col| vec![0.0; col.len()]).collect();
-
-    for row in leaf_points.axis_iter(ndarray::Axis(0)) {
-        for (j, &idx) in row.iter().enumerate() {
-            weights[j][idx] += 1.0;
-        }
-    }
-
-    weights
-}
-
 const MAX_PROJECTION_ITER: usize = 100;
-
 pub fn reproject_grid_values(
     x: ArrayView2<f64>,
-    leaf_points: &Array2<usize>,
+    grid_index: &GridIndex,
     grid_values: &mut [Vec<f64>],
     labels: ArrayView1<'_, f64>,
     mut y_hat: ArrayViewMut1<'_, f64>,
     mut residuals: ArrayViewMut1<'_, f64>,
+    scaling: &mut f64,
 ) {
     let mut err = residuals.pow2().sum();
+
+    let grid_cells_along_dim = (0..grid_values.len())
+        .map(|dim| {
+            (0..grid_values[dim].len())
+                .map(|idx| grid_index.collect_fixed_axis_cells(dim, idx))
+                .collect()
+        })
+        .collect::<Vec<Vec<Vec<usize>>>>();
+    let weights: Vec<Vec<f64>> = (0..grid_values.len())
+        .map(|dim| {
+            (0..grid_values[dim].len())
+                .map(|idx| {
+                    grid_cells_along_dim[dim][idx]
+                        .iter()
+                        .map(|&cell_idx| grid_index.cells[cell_idx].len() as f64)
+                        .sum()
+                })
+                .collect::<Vec<f64>>()
+        })
+        .collect();
+
     for i in 0..MAX_PROJECTION_ITER {
         for (dim, curr_grid_values) in grid_values.iter_mut().enumerate() {
             for (idx, x) in curr_grid_values.iter_mut().enumerate() {
-                let curr_leaf_points_idx: Vec<usize> = leaf_points
-                    .index_axis(Axis(1), dim)
-                    .indexed_iter()
-                    .filter(|(_, &x)| x == idx)
-                    .map(|(i, _)| i)
-                    .collect();
-                let curr_y_hat = y_hat.select(Axis(0), &curr_leaf_points_idx);
-                let curr_residuals = residuals.select(Axis(0), &curr_leaf_points_idx);
+                let mut numerator = 0.0;
+                let mut denominator = 0.0;
 
-                let numerator = curr_residuals
-                    .iter()
-                    .zip(curr_y_hat.iter())
-                    .map(|(r, y)| r * y)
-                    .sum::<f64>();
-                let denominator = curr_y_hat.pow2().sum();
+                for cell_idx in &grid_cells_along_dim[dim][idx] {
+                    for &i in &grid_index.cells[*cell_idx] {
+                        let numerator_sum: f64 = residuals[i] * y_hat[i];
+                        let denominator_sum = denominator + y_hat[i].powi(2);
 
+                        numerator += numerator_sum;
+                        denominator += denominator_sum;
+                    }
+                }
                 let v_hat = numerator / denominator + 1.0;
                 *x *= v_hat;
 
-                for i in &curr_leaf_points_idx {
-                    y_hat[*i] *= v_hat;
-                    residuals[*i] = labels[*i] - y_hat[*i];
+                for cell_idx in &grid_cells_along_dim[dim][idx] {
+                    for &i in &grid_index.cells[*cell_idx] {
+                        y_hat[i] *= v_hat;
+                        residuals[i] = labels[i] - y_hat[i];
+                    }
                 }
             }
         }
         let new_err = residuals.pow2().sum();
         if (new_err - err).abs() < 1e-6 {
+            identify_no_sign(grid_values, &weights, scaling);
             break;
         }
         err = new_err;
@@ -255,12 +272,12 @@ pub fn identify_no_sign(grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scal
 }
 
 pub fn compute_inner_product(first: &FittedTreeGrid, second: &FittedTreeGrid, dim: usize) -> f64 {
-    let first_splits = &first.splits[dim];
-    let first_intervals = &first.intervals[dim];
+    let first_splits = &first.grid_index.boundaries[dim];
+    let first_intervals = &first.grid_index.intervals[dim];
     let first_values = &first.grid_values[dim];
 
-    let second_splits = &second.splits[dim];
-    let second_intervals = &second.intervals[dim];
+    let second_splits = &second.grid_index.boundaries[dim];
+    let second_intervals = &second.grid_index.intervals[dim];
     let second_values = &second.grid_values[dim];
 
     // Combine all split points
@@ -334,6 +351,7 @@ pub fn get_aligned_signs_for_all_tree_grids(tree_grids: &[FittedTreeGrid]) -> Ve
 pub fn combine_into_single_tree_grid<I>(
     grids: &[FittedTreeGrid],
     combine_method: &I,
+    points: ArrayView2<f64>,
 ) -> FittedTreeGrid
 where
     I: IdentificationStrategy,
@@ -342,7 +360,7 @@ where
     let reference = &grids[0];
 
     let aligned_signs = get_aligned_signs_for_all_tree_grids(grids);
-    let num_axes = reference.splits.len();
+    let num_axes = reference.grid_index.intervals.len();
 
     let mut combined_splits: Vec<Vec<f64>> = Vec::with_capacity(num_axes);
     let mut combined_intervals: Vec<Vec<(f64, f64)>> = Vec::with_capacity(num_axes);
@@ -356,7 +374,7 @@ where
         // Collect and deduplicate splits
         let mut splits: Vec<f64> = grids
             .iter()
-            .flat_map(|grid| grid.splits[axis].iter().copied()) // Avoid cloning, just copy f64
+            .flat_map(|grid| grid.grid_index.boundaries[axis].iter().copied()) // Avoid cloning, just copy f64
             .collect();
 
         splits.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -383,7 +401,9 @@ where
             let mut values: Vec<f64> = Vec::with_capacity(grids.len());
             for (grid_index, grid) in grids.iter().enumerate() {
                 // Efficiently find the grid value for the interval [a, b)
-                for (interval_index, &(ia, ib)) in grid.intervals[axis].iter().enumerate() {
+                for (interval_index, &(ia, ib)) in
+                    grid.grid_index.intervals[axis].iter().enumerate()
+                {
                     if a >= ia && b <= ib {
                         values.push(
                             aligned_signs[grid_index][axis]
@@ -406,9 +426,8 @@ where
     }
 
     FittedTreeGrid::new(
-        combined_splits,
-        combined_intervals,
         combined_grid_values,
         combined_scaling,
+        GridIndex::from_boundaries_and_points(combined_splits, points),
     )
 }

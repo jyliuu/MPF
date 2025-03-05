@@ -135,6 +135,7 @@ mod tests {
     use crate::{
         family::boosted::TreeGridFamilyBoostedParams,
         forest::fitter::{fit_boosted, MPFBoostedParams, MPFBoostedParamsBuilder},
+        grid::params::SplitStrategyParams,
         test_data::setup_data_csv,
         FittedModel,
     };
@@ -248,9 +249,13 @@ mod tests {
 
         // Use builder pattern for cleaner parameter construction
         let params = MPFBoostedParamsBuilder::new()
-            .epochs(6)
-            .B(70)
-            .n_iter(13) // Using default, but explicitly stated for clarity
+            .epochs(10)
+            .B(300)
+            .n_iter(20) // Using default, but explicitly stated for clarity
+            .split_strategy(SplitStrategyParams::IntervalRandomSplit {
+                split_try: 3,
+                colsample_bytree: 1.0,
+            })
             .build();
 
         let (fit_result, model) = fit_boosted(x.view(), y.view(), &params);

@@ -4,7 +4,10 @@ use rand::{Rng, SeedableRng};
 use crate::{
     grid::{
         self,
-        params::{IdentificationStrategyParams, SplitStrategyParams, TreeGridParams, TreeGridParamsBuilder},
+        params::{
+            IdentificationStrategyParams, SplitStrategyParams, TreeGridParams,
+            TreeGridParamsBuilder,
+        },
         strategies::{combine_into_single_tree_grid, L2ArithmeticMean, L2Median},
     },
     FitResult, FittedModel,
@@ -75,10 +78,13 @@ pub fn fit<R: Rng + ?Sized>(
         IdentificationStrategyParams::L2_ARITH_MEAN => Some(combine_into_single_tree_grid(
             &tree_grids,
             &L2ArithmeticMean,
+            x.view(),
         )),
-        IdentificationStrategyParams::L2_MEDIAN => {
-            Some(combine_into_single_tree_grid(&tree_grids, &L2Median))
-        }
+        IdentificationStrategyParams::L2_MEDIAN => Some(combine_into_single_tree_grid(
+            &tree_grids,
+            &L2Median,
+            x.view(),
+        )),
         _ => None,
     };
     let tgf = TreeGridFamily(tree_grids, BoostedVariant { combined_tree_grid });
@@ -98,7 +104,7 @@ pub fn fit<R: Rng + ?Sized>(
 
 #[derive(Debug, Clone)]
 pub struct BoostedVariant {
-    combined_tree_grid: Option<FittedTreeGrid>,
+    pub combined_tree_grid: Option<FittedTreeGrid>,
 }
 
 impl AggregationMethod for BoostedVariant {
@@ -106,6 +112,10 @@ impl AggregationMethod for BoostedVariant {
 }
 
 impl TreeGridFamily<BoostedVariant> {
+    pub fn get_combined_tree_grid(&self) -> Option<&FittedTreeGrid> {
+        self.1.combined_tree_grid.as_ref()
+    }
+
     fn predict_majority_voted_sign(&self, x: ArrayView2<f64>) -> Array1<f64> {
         let mut result = Array1::ones(x.shape()[0]);
         let mut signs = Array1::from_elem(x.shape()[0], 0.0);
@@ -131,10 +141,6 @@ impl TreeGridFamily<BoostedVariant> {
         }
         result /= self.0.len() as f64;
         result
-    }
-
-    pub fn combine_into_single_tree_grid(&self) -> FittedTreeGrid {
-        combine_into_single_tree_grid(&self.0, &L2ArithmeticMean)
     }
 }
 
@@ -193,8 +199,7 @@ impl TreeGridFamilyBoostedParamsBuilder {
         self
     }
 
-
-    pub fn identified(mut self, identified: bool) -> Self {
+    pub fn identified(self, identified: bool) -> Self {
         self.identification_strategy(if identified {
             IdentificationStrategyParams::L2_ARITH_MEAN
         } else {
@@ -236,74 +241,37 @@ impl Default for TreeGridFamilyBoostedParams {
 #[cfg(test)]
 mod tests {
 
-    use ndarray::Array1;
+    use rand::{rngs::StdRng, SeedableRng};
 
     use crate::{
-        forest::fitter::{fit_boosted, MPFBoostedParams},
-        grid::{params::TreeGridParams, FittedTreeGrid},
+        grid::{
+            params::TreeGridParams,
+            strategies::{combine_into_single_tree_grid, L2Median},
+        },
         test_data::setup_data_csv,
         FittedModel,
     };
 
-    use super::TreeGridFamilyBoostedParams;
+    use super::{fit, TreeGridFamilyBoostedParams};
 
     #[test]
-    fn test_merged_tree_grids_predicts_the_same() {
+    fn test_combined_tree_grid_predicts_well() {
         let (x, y) = setup_data_csv();
-
-        let (fit_result, mpf) = fit_boosted(
+        let mut rng = StdRng::seed_from_u64(42);
+        let tgf = fit(
             x.view(),
             y.view(),
-            &MPFBoostedParams {
-                epochs: 2,
-                seed: 42,
-                tgf_params: TreeGridFamilyBoostedParams {
-                    B: 20,
-                    bootstrap: false,
-                    tg_params: TreeGridParams::default(),
-                },
+            &TreeGridFamilyBoostedParams {
+                B: 20,
+                bootstrap: false,
+                tg_params: TreeGridParams::default(),
             },
+            &mut rng,
         );
-
-        let merged_tree_grids: Vec<FittedTreeGrid> = mpf
-            .get_tree_grid_families()
-            .iter()
-            .map(|tgf| tgf.combine_into_single_tree_grid())
-            .collect();
-
-        let merged_predictions: Vec<Array1<f64>> = merged_tree_grids
-            .iter()
-            .map(|tg| tg.predict(x.view()))
-            .collect();
-
-        let mpf_predictions: Vec<Array1<f64>> = mpf
-            .get_tree_grid_families()
-            .iter()
-            .map(|tgf| tgf.predict(x.view()))
-            .collect();
-
-        for (merged_pred, mpf_pred) in merged_predictions.iter().zip(mpf_predictions.iter()) {
-            let diff = merged_pred - mpf_pred;
-            println!(
-                "diff max: {:?}",
-                diff.iter().max_by(|a, b| a.partial_cmp(b).unwrap())
-            );
-            println!(
-                "diff min: {:?}",
-                diff.iter().min_by(|a, b| a.partial_cmp(b).unwrap())
-            );
-        }
-
-        let mpf_pred = mpf_predictions
-            .iter()
-            .fold(Array1::zeros(x.nrows()), |acc: Array1<f64>, pred| {
-                acc + pred
-            });
-
-        let merged_pred = merged_predictions
-            .iter()
-            .fold(Array1::zeros(x.nrows()), |acc: Array1<f64>, pred| {
-                acc + pred
-            });
+        let combined_tree_grid = combine_into_single_tree_grid(&tgf.1 .0, &L2Median, x.view());
+        let pred = combined_tree_grid.predict(x.view());
+        let err = (y - pred).powi(2).mean().unwrap();
+        println!("err: {:?}", err);
+        assert!(err < 0.1);
     }
 }
