@@ -88,8 +88,13 @@ impl TreeGridFamilyBoostedPy {
 
     #[getter]
     pub fn get_combined_tree_grid(&self) -> PyResult<TreeGridPy> {
-        let combined_tree_grid = self.0.combine_into_single_tree_grid();
-        Ok(TreeGridPy::from(combined_tree_grid))
+        if let Some(combined_tree_grid) = self.0.get_combined_tree_grid() {
+            Ok(TreeGridPy::from(combined_tree_grid.clone()))
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyAttributeError, _>(
+                "No combined tree grid, rerun with `identification='l2_arith_mean'` or `identification='l2_median'`!",
+            ))
+        }
     }
 
     #[pyo3(name = "predict")]
@@ -151,6 +156,7 @@ impl MPFBoostedPy {
         n_iter: usize,
         split_try: usize,
         colsample_bytree: f64,
+        split_strategy: u8,
         identification: u8,
         seed: u64,
     ) -> PyResult<(MPFBoostedPy, FitResultPy)> {
@@ -162,18 +168,27 @@ impl MPFBoostedPy {
             .epochs(epochs)
             .B(B)
             .n_iter(n_iter)
-            .split_strategy(SplitStrategyParams::RandomSplit {
-                split_try,
-                colsample_bytree,
+            .split_strategy(match split_strategy {
+                1 => SplitStrategyParams::RandomSplit {
+                    split_try,
+                    colsample_bytree,
+                },
+                2 => SplitStrategyParams::IntervalRandomSplit {
+                    split_try,
+                    colsample_bytree,
+                },
+                _ => SplitStrategyParams::RandomSplit {
+                    split_try,
+                    colsample_bytree,
+                },
             })
-            .seed(seed);
-
-        let params = match identification {
-            1 => params.identification_strategy(IdentificationStrategyParams::L2_ARITH_MEAN),
-            2 => params.identification_strategy(IdentificationStrategyParams::L2_MEDIAN),
-            _ => params.identification_strategy(IdentificationStrategyParams::None),
-        };
-        let params = params.build();
+            .identification_strategy(match identification {
+                1 => IdentificationStrategyParams::L2_ARITH_MEAN,
+                2 => IdentificationStrategyParams::L2_MEDIAN,
+                _ => IdentificationStrategyParams::None,
+            })
+            .seed(seed)
+            .build();
 
         let (fit_result, mpf) = fit_boosted(x, y, &params);
         Ok((mpf.into(), FitResultPy::from(fit_result)))
@@ -190,13 +205,13 @@ impl TreeGridPy {
     #[getter]
     pub fn get_splits<'py>(&'py self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         // Convert the reference to a PyList
-        PyList::new(py, &self.splits)
+        PyList::new(py, &self.grid_index.boundaries)
     }
 
     #[getter]
     pub fn get_intervals<'py>(&'py self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         // Convert the reference to a PyList
-        PyList::new(py, &self.intervals)
+        PyList::new(py, &self.grid_index.intervals)
     }
 
     #[getter]

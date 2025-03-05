@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use mpf::grid::{fitter, fitter, TreeGridParams};
+use mpf::grid::{fitter, TreeGridParams};
 use mpf::test_data::setup_data_csv;
 use rand::thread_rng;
 
@@ -14,14 +14,6 @@ fn bench_tree_grid_fitter(c: &mut Criterion) {
             fitter::fit(x.view(), y.view(), &TreeGridParams::default(), &mut rng);
         })
     });
-
-    group.bench_function("OldFitter", |b| {
-        b.iter(|| {
-            let mut rng = thread_rng();
-            fitter::fit(x.view(), y.view(), &TreeGridParams::default(), &mut rng);
-        })
-    });
-
     group.finish();
 }
 

@@ -1,3 +1,9 @@
+[project]
+dependencies = [
+    "numpy",
+    "matplotlib"
+]
+
 [build-system]
 requires = ["maturin>=1,<2"]
 build-backend = "maturin"
