@@ -1,4 +1,7 @@
 [project]
+name = "mpf-py"
+version = "0.1.0"
+
 dependencies = [
     "numpy",
     "matplotlib"
