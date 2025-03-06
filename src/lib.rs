@@ -1,11 +1,9 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
+use ndarray::{Array1, ArrayView2};
+use rand::Rng;
+
 pub mod family;
 pub mod forest;
 pub mod grid;
-pub mod test_data;
-use ndarray::{Array1, ArrayView2};
-use rand::Rng;
 
 #[derive(Debug)]
 pub struct FitResult {

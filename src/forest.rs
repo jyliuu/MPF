@@ -1,8 +1,7 @@
 use ndarray::{Array1, ArrayView2};
 
 use crate::{
-    family::{Aggregation, AggregationMethod, TreeGridFamily},
-    FittedModel,
+    family::{Aggregation, AggregationMethod, TreeGridFamily}, FittedModel,
 };
 
 mod fitter;

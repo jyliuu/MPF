@@ -76,26 +76,3 @@ impl FittedModel for TreeGridFamily<BoostedVariant> {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::params::TreeGridFamilyBoostedParams;
-    use super::*;
-    use crate::test_data::setup_data_csv;
-    use rand::{rngs::StdRng, SeedableRng};
-
-    #[test]
-    fn test_tgf_boosted_fit() {
-        let (x, y) = setup_data_csv();
-        let mut rng = StdRng::seed_from_u64(42);
-        let hyperparameters = TreeGridFamilyBoostedParams::default();
-        let (fit_result, _) = fitter::fit(x.view(), y.view(), &hyperparameters, &mut rng);
-        let mean = y.mean().unwrap();
-        let base_err = (y - mean).powi(2).mean().unwrap();
-        println!("Base error: {:?}, Error: {:?}", base_err, fit_result.err);
-        assert!(
-            fit_result.err < base_err,
-            "Error is not less than mean error"
-        );
-    }
-}

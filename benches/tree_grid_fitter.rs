@@ -1,7 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use mpf::grid::{fit, TreeGridParams};
-use mpf::test_data::setup_data_csv;
+#[path = "../tests/test_data.rs"]
+mod test_data;
 use rand::thread_rng;
+use test_data::setup_data_csv;
 
 fn bench_tree_grid_fitter(c: &mut Criterion) {
     let (x, y) = setup_data_csv();
