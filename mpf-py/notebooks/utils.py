@@ -4,10 +4,30 @@ from sklearn.model_selection import KFold
 from joblib import Parallel, delayed
 import mpf_py
 from scipy.stats import randint
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import numpy as np
+
+def bump_function(center, radius, scale=1):
+    def bump(X):
+        # Vectorized calculation with safety margin
+        squared_dist = np.sum((X - center)**2, axis=1)
+        denominator = 1 - (squared_dist / (radius**2))
+        
+        # Apply safety margin to avoid division by zero
+        denominator = np.clip(denominator, 1e-9, None)  # Prevent negative/zero values
+        
+        return scale * np.exp(-1 / denominator)
+    return bump
+
+bump_neg4_1 = bump_function(np.array([-4, 1]), 1, scale=1)
+bump_1_0 =  bump_function(np.array([1, 0]), 0.5, scale=3)
+bump_neg2_neg2 = bump_function(np.array([-2, -2]), 1, scale=2)
 
 true_model = lambda x: 2*x[:,1] * x[:,0] + x[:,0]
 true_model2 = lambda x: np.sin(x[:,0]) * np.cos(x[:,1]) + 2 * x[:,0] - 2 * x[:,1]
 true_model3 = lambda X: np.exp(np.sin(X[:,0]) * np.cos(X[:,1])) + X[:,0]
+true_model4 = lambda X: bump_neg4_1(X) + bump_1_0(X) + bump_neg2_neg2(X) + bump_neg2_neg2(X)
 
 
 def gen_data(n=5000, seed=1, unif = True, noise=True, model=true_model3):
@@ -23,6 +43,165 @@ def gen_data(n=5000, seed=1, unif = True, noise=True, model=true_model3):
     else:
         y = model(X)
     return X, y
+
+def plot_2d_model_predictions_map(
+        model, 
+        x_bounds=(-4,4), y_bounds=(-4,4),
+        grid_points=100, cmap='viridis',
+        title="Model Predictions", data=None, cbar_max=5
+    ):
+    """
+    Constructs a grid of (longitude, latitude) coordinates and uses the provided ML model to generate predictions.
+    The predictions are then visualized as a colored grid overlaid on a map of California.
+
+    Parameters:
+        model (callable): A function or machine learning model that accepts an input array of shape (N, 2)
+                          and returns prediction values as an array of shape (N,).
+        x_bounds (tuple): A tuple (lon_min, lon_max) defining the longitude range.
+        y_bounds (tuple): A tuple (lat_min, lat_max) defining the latitude range.
+        grid_points (int): The number of points to generate along each axis.
+        cmap (str): The colormap to use when displaying the predictions.
+        title (str): The title for the plot.
+        data (tuple): Optional tuple of (X,y) where X contains coordinates and y contains target values
+        cbar_max (float): The maximum value for the colorbar
+    """
+    # Create linearly spaced values for longitude and latitude
+    lon_min, lon_max = x_bounds
+    lat_min, lat_max = y_bounds
+
+    lon_vals = np.linspace(lon_min, lon_max, grid_points)
+    lat_vals = np.linspace(lat_min, lat_max, grid_points)
+
+    # Create a mesh grid of points
+    LON, LAT = np.meshgrid(lon_vals, lat_vals)
+
+    # Flatten the grid to form (longitude, latitude) pairs
+    grid = np.column_stack([LON.ravel(), LAT.ravel()])
+
+    # Obtain predictions from the ML model
+    predictions = np.clip(model(grid), a_min=-3, a_max=cbar_max)
+
+    # Reshape predictions back into the grid format
+    Z = predictions.reshape(LON.shape)
+
+    # Set up the map projection
+    plt.figure(figsize=(12, 8))
+    ax = plt.axes(projection=ccrs.PlateCarree())
+    
+    # Add map features
+    ax.add_feature(cfeature.COASTLINE)
+    ax.add_feature(cfeature.STATES)
+    
+    # Set the extent to California (with a bit of margin)
+    margin = 0.5  # degrees
+    ax.set_extent([lon_min - margin, lon_max + margin, 
+                   lat_min - margin, lat_max + margin], crs=ccrs.PlateCarree())
+    
+    # Plot the prediction contours
+    cs = ax.contourf(LON, LAT, Z, levels=20, cmap=cmap, transform=ccrs.PlateCarree(), alpha=0.7, vmax=cbar_max)
+    
+    # Add colorbar
+    cbar = plt.colorbar(cs, ax=ax, shrink=0.6, pad=0.05)
+    cbar.set_label('Prediction Value')
+    cbar.set_ticks(np.linspace(Z.min(), cbar_max, 5))
+    
+    # Add gridlines
+    gl = ax.gridlines(draw_labels=True, linewidth=0.5, color='gray', alpha=0.5, linestyle='--')
+    gl.top_labels = False
+    gl.right_labels = False
+    
+    # Add title
+    plt.title(title)
+
+    # If data is provided, plot the actual points
+    if data is not None:
+        X, y = data
+        scatter = ax.scatter(X[:, 0], X[:, 1], c=y, cmap=cmap, 
+                           transform=ccrs.PlateCarree(), alpha=1, s=3)
+    
+    plt.show()
+
+
+
+def plot_2d_model_map_errors(model, data, grid_points=100, cmap='coolwarm',
+                           title="Model Errors", cbar_max=None):
+    """
+    Visualizes mean prediction errors (y - ŷ) in geographic grid cells with marginal error histograms.
+    """
+    X, y = data
+    predictions = model(X)
+    errors = y - predictions
+    squared_errors = errors ** 2
+
+    # Create bin edges
+    lon_min, lon_max = (X[:, 0].min(), X[:, 0].max())
+    lat_min, lat_max = (X[:, 1].min(), X[:, 1].max())
+    print(lon_min, lon_max, lat_min, lat_max)
+    lon_edges = np.linspace(lon_min, lon_max, grid_points + 1)
+    lat_edges = np.linspace(lat_min, lat_max, grid_points + 1)
+
+    # Calculate 2D histograms
+    H_counts, _, _ = np.histogram2d(X[:, 0], X[:, 1], bins=[lon_edges, lat_edges])  # Swapped order of edges
+    H_errors, _, _ = np.histogram2d(X[:, 0], X[:, 1], bins=[lon_edges, lat_edges], weights=errors)
+    H_errors_squared, _, _ = np.histogram2d(X[:, 0], X[:, 1], bins=[lon_edges, lat_edges], weights=squared_errors)
+        # Compute mean errors and handle empty bins
+    with np.errstate(divide='ignore', invalid='ignore'):
+        H_mean = H_errors / H_counts
+    H_mean[H_counts == 0] = np.nan
+
+    # Calculate marginal sums
+    lon_sse = np.nansum(H_errors_squared, axis=1)  # Sum along latitude
+    lat_sse = np.nansum(H_errors_squared, axis=0)  # Sum along longitude
+
+    # Create plot with marginal histograms
+    fig = plt.figure(figsize=(16, 12))
+    gs = fig.add_gridspec(2, 2, width_ratios=[4, 1], height_ratios=[4, 1],
+                        hspace=0.05, wspace=0.05)
+    
+    # Main map axis
+    ax = fig.add_subplot(gs[0, 0], projection=ccrs.PlateCarree())
+    ax.add_feature(cfeature.COASTLINE)
+    ax.add_feature(cfeature.STATES)
+    
+    margin = 0.5
+    ax.set_extent([-124.35, -114.31, 32.54, 41.95], crs=ccrs.PlateCarree())
+
+    # Plot error grid
+    vmax = cbar_max or np.nanmax(np.abs(H_mean))
+    vmin = -vmax if cbar_max is None else -cbar_max
+    mesh = ax.pcolormesh(lon_edges, lat_edges, H_mean.T, 
+                        cmap=cmap, vmin=vmin, vmax=vmax,
+                        transform=ccrs.PlateCarree(), alpha=0.7)
+
+    # Add colorbar
+    cbar = plt.colorbar(mesh, ax=ax, shrink=0.6, pad=0.05)
+    cbar.set_label('Mean Error')
+    
+    # Add grid lines and title
+    gl = ax.gridlines(draw_labels=True, linewidth=0.5, color='gray', alpha=0.5, linestyle='--')
+    gl.top_labels = False
+    gl.right_labels = False
+    plt.title(title)
+
+    # X-axis histogram (longitude SSE)
+    ax_histx = fig.add_subplot(gs[1, 0])
+    bar_widths = np.diff(lon_edges)
+    ax_histx.bar(lon_edges[:-1], lon_sse, width=bar_widths, 
+                align='edge', color=plt.cm.get_cmap(cmap)(0.5), alpha=0.7)
+    ax_histx.set_ylabel('Longitudinal SSE')
+    ax_histx.grid(True, alpha=0.3)
+    ax_histx.set_xlim(lon_min, lon_max)
+
+    # Y-axis histogram (latitude SSE)
+    ax_histy = fig.add_subplot(gs[0, 1])
+    bar_heights = np.diff(lat_edges)
+    ax_histy.barh(lat_edges[:-1], lat_sse, height=bar_heights,
+                 align='edge', color=plt.cm.get_cmap(cmap)(0.5), alpha=0.7)
+    ax_histy.set_xlabel('Latitudinal SSE')
+    ax_histy.grid(True, alpha=0.3)
+    ax_histy.set_ylim(lat_min, lat_max)
+
+    plt.show()
 
 
 def plot_2d_model_predictions(model, x_bounds=(-4,4), y_bounds=(-4,4), grid_points=100, cmap='seismic',

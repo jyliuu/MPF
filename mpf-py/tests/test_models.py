@@ -50,7 +50,7 @@ def test_mpf_boosted_fit(training_data, test_data):
     X_test, y_test = test_data
 
     # Train the MPF estimator
-    mpf, fr = MPF.Boosted.fit(X, y, epochs=3, B=37, n_iter=30, split_try=16, colsample_bytree=1.0, identified=True)
+    mpf, fr = MPF.Boosted.fit(X, y, epochs=3, n_trees=37, n_iter=30, split_try=16, colsample_bytree=1.0, identified=True)
 
     print("Fit result: ", fr)
     # MPF predictions and loss

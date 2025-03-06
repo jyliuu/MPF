@@ -105,7 +105,7 @@ class MPF:
             x: np.typing.NDArray[np.float64], 
             y: np.typing.NDArray[np.float64],
             epochs: int,
-            B: int,
+            n_trees: int,
             n_iter: int,
             split_try: int, 
             colsample_bytree: float,
@@ -119,7 +119,7 @@ class MPF:
             
             mpf_boosted, fr = _MPFBoosted.fit(
                 x, y, 
-                epochs, B, n_iter, split_try, 
+                epochs, n_trees, n_iter, split_try, 
                 colsample_bytree, 
                 split_strategy,
                 identification_strategy, 

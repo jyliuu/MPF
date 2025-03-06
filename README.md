@@ -67,7 +67,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 model, fit_result = MPF.fit_boosted(
     X_train, y_train,
     epochs=3,
-    B=1,
+    n_trees1,
     n_iter=260,
     split_try=20,
     colsample_bytree=1.0,

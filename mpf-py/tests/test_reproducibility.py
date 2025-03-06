@@ -17,7 +17,7 @@ def test_mpf_boosted_reproducibility():
     model1, _ = MPF.Boosted.fit(
         X, y,
         epochs=2,
-        B=5,
+        n_trees=5,
         n_iter=10,
         split_try=5,
         colsample_bytree=1.0,
@@ -29,7 +29,7 @@ def test_mpf_boosted_reproducibility():
     model2, _ = MPF.Boosted.fit(
         X, y,
         epochs=2,
-        B=5,
+        n_trees=5,
         n_iter=10,
         split_try=5,
         colsample_bytree=1.0,
@@ -54,7 +54,7 @@ def test_different_seeds_produce_different_results():
     model1, _ = MPF.Boosted.fit(
         X, y,
         epochs=2,
-        B=5,
+        n_trees=5,
         n_iter=10,
         split_try=5,
         colsample_bytree=1.0,
@@ -65,7 +65,7 @@ def test_different_seeds_produce_different_results():
     model2, _ = MPF.Boosted.fit(
         X, y,
         epochs=2,
-        B=5,
+        n_trees=5,
         n_iter=10,
         split_try=5,
         colsample_bytree=1.0,
