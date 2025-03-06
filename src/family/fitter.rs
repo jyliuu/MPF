@@ -127,7 +127,7 @@ mod tests {
     };
 
     #[test]
-    fn test_l2_mediann_combined_tree_grid_predicts_well() {
+    fn test_l2_median_combined_tree_grid_predicts_well() {
         let (x, y) = setup_data_csv();
         let mut rng = StdRng::seed_from_u64(42);
         let tgf = fit(

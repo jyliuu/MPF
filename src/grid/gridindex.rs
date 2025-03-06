@@ -355,7 +355,7 @@ mod tests {
         // Query the cell corresponding to x < 0 (cell index 0 along axis 0).
         let cell_neg = grid.query(&[0, 0]).unwrap();
         // Points with x-coordinate < 0 are: indices 0, 1, 5.
-        assert_eq!(cell_neg.len(), 5);
+        assert_eq!(cell_neg.len(), 3);
 
         // Split axis 1 (y-coordinate) at 0.0.
         grid.split_axis(1, 0.0, points.view());
@@ -367,13 +367,13 @@ mod tests {
         // Query the cell with x < 0 and y < 0, i.e. cell indices [0, 0].
         let cell_neg_neg = grid.query(&[0, 0]).unwrap();
         // In our sample, points with x < 0 and y < 0: indices 0 and 1.
-        assert_eq!(cell_neg_neg.len(), 3);
+        assert_eq!(cell_neg_neg.len(), 2);
 
         // You can also perform a range query.
         // For example, query all cells with x index in 0..2 and y index in 0..1.
         let pts = grid.query_range(&[0..2, 0..1]);
         // This should collect all points whose y-coordinate is in the lower interval.
         // In our test data, that should be indices 0, 1, 6.
-        assert_eq!(pts.len(), 4);
+        assert_eq!(pts.len(), 3);
     }
 }
