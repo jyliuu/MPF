@@ -2,101 +2,11 @@ use ndarray::{ArrayView1, ArrayView2};
 use rand::{rngs::StdRng, SeedableRng};
 
 use crate::{
-    family::{
-        boosted::{
-            self, BoostedVariant, TreeGridFamilyBoostedParams, TreeGridFamilyBoostedParamsBuilder,
-        },
-        TreeGridFamily,
-    },
-    grid::params::{IdentificationStrategyParams, SplitStrategyParams},
+    family::{fit, BoostedVariant, TreeGridFamily},
     FitResult,
 };
 
-use super::mpf::MPF;
-
-pub struct MPFBoostedParams {
-    pub epochs: usize,
-    pub tgf_params: TreeGridFamilyBoostedParams,
-    pub seed: u64,
-}
-
-// Builder for MPFBoostedParams
-pub struct MPFBoostedParamsBuilder {
-    epochs: usize,
-    tgf_params_builder: TreeGridFamilyBoostedParamsBuilder,
-    seed: u64,
-}
-
-impl MPFBoostedParamsBuilder {
-    pub fn new() -> Self {
-        Self {
-            epochs: 5,
-            tgf_params_builder: TreeGridFamilyBoostedParamsBuilder::new(),
-            seed: 42,
-        }
-    }
-
-    pub fn epochs(mut self, epochs: usize) -> Self {
-        self.epochs = epochs;
-        self
-    }
-
-    pub fn seed(mut self, seed: u64) -> Self {
-        self.seed = seed;
-        self
-    }
-
-    // Convenience methods for nested parameters
-    pub fn B(mut self, b: usize) -> Self {
-        self.tgf_params_builder = self.tgf_params_builder.B(b);
-        self
-    }
-
-    pub fn n_iter(mut self, n_iter: usize) -> Self {
-        self.tgf_params_builder = self.tgf_params_builder.n_iter(n_iter);
-        self
-    }
-
-    pub fn split_strategy(mut self, strategy: SplitStrategyParams) -> Self {
-        self.tgf_params_builder = self.tgf_params_builder.split_strategy(strategy);
-        self
-    }
-
-    pub fn identified(mut self, identified: bool) -> Self {
-        self.tgf_params_builder = self.tgf_params_builder.identified(identified);
-        self
-    }
-
-    pub fn identification_strategy(
-        mut self,
-        identification_strategy: IdentificationStrategyParams,
-    ) -> Self {
-        self.tgf_params_builder = self
-            .tgf_params_builder
-            .identification_strategy(identification_strategy);
-        self
-    }
-
-    pub fn build(self) -> MPFBoostedParams {
-        MPFBoostedParams {
-            epochs: self.epochs,
-            tgf_params: self.tgf_params_builder.build(),
-            seed: self.seed,
-        }
-    }
-}
-
-impl Default for MPFBoostedParamsBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Default for MPFBoostedParams {
-    fn default() -> Self {
-        MPFBoostedParamsBuilder::new().build()
-    }
-}
+use super::{params::MPFBoostedParams, MPF};
 
 pub fn fit_boosted(
     x: ArrayView2<f64>,
@@ -115,8 +25,7 @@ pub fn fit_boosted(
     let mut tree_grid_families = Vec::new();
 
     for _ in 0..*epochs {
-        let (fit_result, tree_grid_family) =
-            boosted::fit(x.view(), y_new.view(), tgf_params, &mut rng);
+        let (fit_result, tree_grid_family) = fit(x.view(), y_new.view(), tgf_params, &mut rng);
         tree_grid_families.push(tree_grid_family);
         y_new = fit_result.residuals;
     }
@@ -133,8 +42,7 @@ pub fn fit_boosted(
 #[cfg(test)]
 mod tests {
     use crate::{
-        family::boosted::TreeGridFamilyBoostedParams,
-        forest::fitter::{fit_boosted, MPFBoostedParams, MPFBoostedParamsBuilder},
+        forest::{fitter::fit_boosted, params::MPFBoostedParamsBuilder},
         grid::params::SplitStrategyParams,
         test_data::setup_data_csv,
         FittedModel,
@@ -153,11 +61,12 @@ mod tests {
         let x_test = x.slice(s![n / 2.., ..]);
         let y_test = y.slice(s![n / 2..]);
 
-        let params = MPFBoostedParams {
-            epochs: 5,
-            tgf_params: TreeGridFamilyBoostedParams::default(),
-            seed: 42,
-        };
+        let params = MPFBoostedParamsBuilder::new()
+            .epochs(5)
+            .B(5)
+            .n_iter(25)
+            .seed(42)
+            .build();
         let (fit_result, mpf) = fit_boosted(x_train, y_train, &params);
         let mean = y_test.mean().unwrap();
         let base_err = y_test.view().map(|v| v - mean).powi(2).mean().unwrap();

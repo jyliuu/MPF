@@ -1,7 +1,7 @@
 use std::{ops::Div, time::SystemTime};
 
 use mpf::{
-    forest::fitter::{fit_boosted, MPFBoostedParamsBuilder},
+    forest::{fit_boosted, params::MPFBoostedParamsBuilder},
     FittedModel,
 };
 use ndarray::s;

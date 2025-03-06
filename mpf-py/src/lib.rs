@@ -7,11 +7,8 @@ use std::ops::{Deref, DerefMut};
 use numpy::{PyArray1, ToPyArray};
 
 use mpf::{
-    family::{boosted::BoostedVariant, TreeGridFamily},
-    forest::{
-        fitter::{fit_boosted, MPFBoostedParamsBuilder},
-        mpf::MPF,
-    },
+    family::{BoostedVariant, TreeGridFamily},
+    forest::{fit_boosted, params::MPFBoostedParamsBuilder, MPF},
     grid::{
         self,
         params::{IdentificationStrategyParams, SplitStrategyParams},
@@ -254,7 +251,7 @@ impl TreeGridPy {
             .identified(identified)
             .build();
         let mut rng = StdRng::seed_from_u64(seed);
-        let (fit_result, tg) = grid::fitter::fit(x.view(), y.view(), &params, &mut rng);
+        let (fit_result, tg) = grid::fit(x.view(), y.view(), &params, &mut rng);
         Ok((tg.into(), FitResultPy::from(fit_result)))
     }
 }

@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use ndarray::{Array1, ArrayView1, ArrayView2, ArrayViewMut1};
 use rand::{seq::index::sample, Rng};
 

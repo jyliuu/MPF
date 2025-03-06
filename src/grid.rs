@@ -1,14 +1,16 @@
-use fitter::TreeGridFitter;
 use gridindex::GridIndex;
 use ndarray::{Array1, ArrayView2, Axis};
 
 use crate::FittedModel;
 
 pub mod candidates;
-pub mod fitter;
+mod fitter;
 mod gridindex;
+
+use fitter::TreeGridFitter;
 pub mod params;
 pub mod strategies;
+pub use fitter::fit;
 
 // Re-export TreeGridParams and related types
 pub use params::{TreeGridParams, TreeGridParamsBuilder};

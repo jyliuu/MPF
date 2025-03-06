@@ -1,0 +1,88 @@
+use crate::{
+    family::params::{TreeGridFamilyBoostedParams, TreeGridFamilyBoostedParamsBuilder},
+    grid::params::{IdentificationStrategyParams, SplitStrategyParams},
+};
+
+pub struct MPFBoostedParams {
+    pub epochs: usize,
+    pub tgf_params: TreeGridFamilyBoostedParams,
+    pub seed: u64,
+}
+
+// Builder for MPFBoostedParams
+pub struct MPFBoostedParamsBuilder {
+    epochs: usize,
+    tgf_params_builder: TreeGridFamilyBoostedParamsBuilder,
+    seed: u64,
+}
+
+impl MPFBoostedParamsBuilder {
+    pub fn new() -> Self {
+        Self {
+            epochs: 5,
+            tgf_params_builder: TreeGridFamilyBoostedParamsBuilder::new(),
+            seed: 42,
+        }
+    }
+
+    pub fn epochs(mut self, epochs: usize) -> Self {
+        self.epochs = epochs;
+        self
+    }
+
+    pub fn seed(mut self, seed: u64) -> Self {
+        self.seed = seed;
+        self
+    }
+
+    // Convenience methods for nested parameters
+    pub fn B(mut self, b: usize) -> Self {
+        self.tgf_params_builder = self.tgf_params_builder.B(b);
+        self
+    }
+
+    pub fn n_iter(mut self, n_iter: usize) -> Self {
+        self.tgf_params_builder = self.tgf_params_builder.n_iter(n_iter);
+        self
+    }
+
+    pub fn split_strategy(mut self, strategy: SplitStrategyParams) -> Self {
+        self.tgf_params_builder = self.tgf_params_builder.split_strategy(strategy);
+        self
+    }
+
+    pub fn identified(mut self, identified: bool) -> Self {
+        self.tgf_params_builder = self.tgf_params_builder.identified(identified);
+        self
+    }
+
+    pub fn identification_strategy(
+        mut self,
+        identification_strategy: IdentificationStrategyParams,
+    ) -> Self {
+        self.tgf_params_builder = self
+            .tgf_params_builder
+            .identification_strategy(identification_strategy);
+        self
+    }
+
+    pub fn build(self) -> MPFBoostedParams {
+        MPFBoostedParams {
+            epochs: self.epochs,
+            tgf_params: self.tgf_params_builder.build(),
+            seed: self.seed,
+        }
+    }
+}
+
+impl Default for MPFBoostedParamsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for MPFBoostedParams {
+    fn default() -> Self {
+        MPFBoostedParamsBuilder::new().build()
+    }
+}
