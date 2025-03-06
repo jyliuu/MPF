@@ -171,11 +171,11 @@ impl<'a> TreeGridFitter<'a> {
         if reproject {
             reproject_grid_values(
                 self.x.view(),
-                &self.grid_index,
-                &mut self.grid_values,
                 self.labels.view(),
                 self.y_hat.view_mut(),
                 self.residuals.view_mut(),
+                &self.grid_index,
+                &mut self.grid_values,
                 &mut self.scaling,
             );
         }

@@ -177,18 +177,17 @@ pub fn compute_initial_values(
     (mean, grid_values, y_hat)
 }
 
-const MAX_PROJECTION_ITER: usize = 100;
+const MAX_PROJECTION_ITER: usize = 10000;
 pub fn reproject_grid_values(
     x: ArrayView2<f64>,
+    labels: ArrayView1<f64>,
+    mut y_hat: ArrayViewMut1<f64>,
+    mut residuals: ArrayViewMut1<f64>,
     grid_index: &GridIndex,
     grid_values: &mut [Vec<f64>],
-    labels: ArrayView1<'_, f64>,
-    mut y_hat: ArrayViewMut1<'_, f64>,
-    mut residuals: ArrayViewMut1<'_, f64>,
     scaling: &mut f64,
-) {
-    let mut err = residuals.pow2().sum();
-
+) -> f64 {
+    let mut err = residuals.pow2().mean().unwrap();
     let grid_cells_along_dim = (0..grid_values.len())
         .map(|dim| {
             (0..grid_values[dim].len())
@@ -224,7 +223,11 @@ pub fn reproject_grid_values(
                         denominator += denominator_sum;
                     }
                 }
-                let v_hat = numerator / denominator + 1.0;
+                let v_hat = if denominator > 0.0 {
+                    numerator / denominator + 1.0
+                } else {
+                    1.0
+                };
                 *x *= v_hat;
 
                 for cell_idx in &grid_cells_along_dim[dim][idx] {
@@ -235,13 +238,16 @@ pub fn reproject_grid_values(
                 }
             }
         }
-        let new_err = residuals.pow2().sum();
-        if (new_err - err).abs() < 1e-6 {
+
+        let new_err = residuals.pow2().mean().unwrap();
+        let diff = (new_err - err).abs();
+        if diff < 1e-6 {
             identify_no_sign(grid_values, &weights, scaling);
             break;
         }
         err = new_err;
     }
+    err
 }
 
 pub fn identify_no_sign(grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {
