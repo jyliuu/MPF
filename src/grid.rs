@@ -144,8 +144,7 @@ mod tests {
         let pred_unidentified = tg_unidentified.predict(x.view());
 
         let mut rng = StdRng::seed_from_u64(42);
-        hyperparameters.identification_strategy_params =
-            IdentificationStrategyParams::L2_ARITH_MEAN;
+        hyperparameters.identification_strategy_params = IdentificationStrategyParams::L2ArithMean;
         let (_, tg_identified) = fitter::fit(x.view(), y.view(), &hyperparameters, &mut rng);
         let pred_identified = tg_identified.predict(x.view());
 

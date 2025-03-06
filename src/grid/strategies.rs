@@ -48,7 +48,7 @@ impl IdentificationStrategy for L2Median {
                 // Even length - need to find the other middle element
                 let max_of_lower = partial[..mid]
                     .iter()
-                    .fold(std::f64::NEG_INFINITY, |a, &b| a.max(b));
+                    .fold(f64::NEG_INFINITY, |a, &b| a.max(b));
                 (max_of_lower + partial[mid]) / 2.0
             } else {
                 partial[mid]

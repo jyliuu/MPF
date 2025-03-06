@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone)]
 pub enum SplitStrategyParams {
     RandomSplit {
@@ -13,8 +12,8 @@ pub enum SplitStrategyParams {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum IdentificationStrategyParams {
-    L2_ARITH_MEAN,
-    L2_MEDIAN,
+    L2ArithMean,
+    L2Median,
     None,
 }
 
@@ -43,7 +42,7 @@ impl TreeGridParamsBuilder {
                 split_try: 10,
                 colsample_bytree: 1.0,
             },
-            identification_strategy_params: IdentificationStrategyParams::L2_ARITH_MEAN,
+            identification_strategy_params: IdentificationStrategyParams::L2ArithMean,
             reproject_grid_values: true,
         }
     }
@@ -60,7 +59,7 @@ impl TreeGridParamsBuilder {
 
     pub fn identified(mut self, identified: bool) -> Self {
         self.identification_strategy_params = if identified {
-            IdentificationStrategyParams::L2_ARITH_MEAN
+            IdentificationStrategyParams::L2ArithMean
         } else {
             IdentificationStrategyParams::None
         };

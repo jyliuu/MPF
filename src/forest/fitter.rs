@@ -63,7 +63,7 @@ mod tests {
 
         let params = MPFBoostedParamsBuilder::new()
             .epochs(5)
-            .B(5)
+            .n_trees(5)
             .n_iter(25)
             .seed(42)
             .build();
@@ -90,7 +90,7 @@ mod tests {
         // Use builder pattern for cleaner parameter construction
         let params = MPFBoostedParamsBuilder::new()
             .epochs(2)
-            .B(5)
+            .n_trees(5)
             .n_iter(25) // Using default, but explicitly stated for clarity
             .seed(42)
             .build();
@@ -118,7 +118,7 @@ mod tests {
         // Use builder pattern for cleaner parameter construction
         let params1 = MPFBoostedParamsBuilder::new()
             .epochs(2)
-            .B(5)
+            .n_trees(5)
             .n_iter(25) // Using default, but explicitly stated for clarity
             .seed(42)
             .build();
@@ -128,7 +128,7 @@ mod tests {
 
         let params2 = MPFBoostedParamsBuilder::new()
             .epochs(2)
-            .B(5)
+            .n_trees(5)
             .n_iter(25)
             .seed(43) // Different seed
             .build();
@@ -159,7 +159,7 @@ mod tests {
         // Use builder pattern for cleaner parameter construction
         let params = MPFBoostedParamsBuilder::new()
             .epochs(10)
-            .B(300)
+            .n_trees(300)
             .n_iter(20) // Using default, but explicitly stated for clarity
             .split_strategy(SplitStrategyParams::IntervalRandomSplit {
                 split_try: 3,

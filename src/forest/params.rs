@@ -36,8 +36,8 @@ impl MPFBoostedParamsBuilder {
     }
 
     // Convenience methods for nested parameters
-    pub fn B(mut self, b: usize) -> Self {
-        self.tgf_params_builder = self.tgf_params_builder.B(b);
+    pub fn n_trees(mut self, n_trees: usize) -> Self {
+        self.tgf_params_builder = self.tgf_params_builder.n_trees(n_trees);
         self
     }
 

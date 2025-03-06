@@ -22,14 +22,14 @@ pub fn fit<R: Rng + ?Sized>(
     rng: &mut R,
 ) -> (FitResult, TreeGridFamily<BoostedVariant>) {
     let TreeGridFamilyBoostedParams {
-        B,
+        n_trees,
         bootstrap,
         tg_params,
     } = hyperparameters;
     let n = x.nrows();
 
     // Pre-generate seeds for each thread
-    let seeds: Vec<u64> = (0..*B).map(|_| rng.gen()).collect();
+    let seeds: Vec<u64> = (0..*n_trees).map(|_| rng.gen()).collect();
 
     #[cfg(not(feature = "use-rayon"))]
     let tree_grids: Vec<FittedTreeGrid> = seeds
@@ -72,12 +72,12 @@ pub fn fit<R: Rng + ?Sized>(
         .collect();
 
     let combined_tree_grid = match tg_params.identification_strategy_params {
-        IdentificationStrategyParams::L2_ARITH_MEAN => Some(combine_into_single_tree_grid(
+        IdentificationStrategyParams::L2ArithMean => Some(combine_into_single_tree_grid(
             &tree_grids,
             &L2ArithmeticMean,
             x.view(),
         )),
-        IdentificationStrategyParams::L2_MEDIAN => Some(combine_into_single_tree_grid(
+        IdentificationStrategyParams::L2Median => Some(combine_into_single_tree_grid(
             &tree_grids,
             &L2Median,
             x.view(),
@@ -122,7 +122,7 @@ mod tests {
             x.view(),
             y.view(),
             &TreeGridFamilyBoostedParams {
-                B: 20,
+                n_trees: 20,
                 bootstrap: false,
                 tg_params: TreeGridParams::default(),
             },

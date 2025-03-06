@@ -149,7 +149,7 @@ impl MPFBoostedPy {
         x: PyReadonlyArray2<'py, f64>,
         y: PyReadonlyArray1<'py, f64>,
         epochs: usize,
-        B: usize,
+        n_trees: usize,
         n_iter: usize,
         split_try: usize,
         colsample_bytree: f64,
@@ -163,7 +163,7 @@ impl MPFBoostedPy {
         // Use the builder pattern
         let params = MPFBoostedParamsBuilder::new()
             .epochs(epochs)
-            .B(B)
+            .n_trees(n_trees)
             .n_iter(n_iter)
             .split_strategy(match split_strategy {
                 1 => SplitStrategyParams::RandomSplit {
@@ -180,8 +180,8 @@ impl MPFBoostedPy {
                 },
             })
             .identification_strategy(match identification {
-                1 => IdentificationStrategyParams::L2_ARITH_MEAN,
-                2 => IdentificationStrategyParams::L2_MEDIAN,
+                1 => IdentificationStrategyParams::L2ArithMean,
+                2 => IdentificationStrategyParams::L2Median,
                 _ => IdentificationStrategyParams::None,
             })
             .seed(seed)

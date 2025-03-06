@@ -4,7 +4,7 @@ use crate::grid::params::{
 
 #[derive(Debug)]
 pub struct TreeGridFamilyBoostedParams {
-    pub B: usize,
+    pub n_trees: usize,
     pub bootstrap: bool,
     pub tg_params: TreeGridParams,
 }
@@ -12,7 +12,7 @@ pub struct TreeGridFamilyBoostedParams {
 // Builder for TreeGridFamilyBoostedParams
 #[derive(Debug)]
 pub struct TreeGridFamilyBoostedParamsBuilder {
-    B: usize,
+    n_trees: usize,
     bootstrap: bool,
     tg_params_builder: TreeGridParamsBuilder,
 }
@@ -20,14 +20,14 @@ pub struct TreeGridFamilyBoostedParamsBuilder {
 impl TreeGridFamilyBoostedParamsBuilder {
     pub fn new() -> Self {
         Self {
-            B: 100,
+            n_trees: 100,
             bootstrap: false,
             tg_params_builder: TreeGridParamsBuilder::new(),
         }
     }
 
-    pub fn B(mut self, B: usize) -> Self {
-        self.B = B;
+    pub fn n_trees(mut self, n_trees: usize) -> Self {
+        self.n_trees = n_trees;
         self
     }
 
@@ -49,7 +49,7 @@ impl TreeGridFamilyBoostedParamsBuilder {
 
     pub fn identified(self, identified: bool) -> Self {
         self.identification_strategy(if identified {
-            IdentificationStrategyParams::L2_ARITH_MEAN
+            IdentificationStrategyParams::L2ArithMean
         } else {
             IdentificationStrategyParams::None
         })
@@ -67,7 +67,7 @@ impl TreeGridFamilyBoostedParamsBuilder {
 
     pub fn build(self) -> TreeGridFamilyBoostedParams {
         TreeGridFamilyBoostedParams {
-            B: self.B,
+            n_trees: self.n_trees,
             bootstrap: self.bootstrap,
             tg_params: self.tg_params_builder.build(),
         }

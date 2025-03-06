@@ -74,14 +74,15 @@ pub fn find_refine_candidate(
         right,
     } = slice_candidate;
 
-    let mut dims = vec![];
-    for dim in 0..x.ncols() {
-        dims.push(if dim == col {
-            vec![index]
-        } else {
-            (0..intervals[dim].len()).collect()
-        });
-    }
+    let dims = (0..x.ncols())
+        .map(|dim| {
+            if dim == col {
+                vec![index]
+            } else {
+                (0..intervals[dim].len()).collect()
+            }
+        })
+        .collect::<Vec<_>>();
     let leaves: Vec<Array1<usize>> = dims
         .into_iter()
         .multi_cartesian_product()
@@ -188,7 +189,6 @@ pub fn update_leaf_points(
     }
 }
 
-
 pub fn update_predictions(
     y_hat: &mut Array1<f64>,
     residuals: &mut Array1<f64>,
@@ -206,4 +206,4 @@ pub fn update_predictions(
         y_hat[i] *= update_b;
         residuals[i] = labels[i] - y_hat[i];
     }
-} 
+}
