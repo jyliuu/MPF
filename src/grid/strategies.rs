@@ -13,7 +13,6 @@ pub struct L2Median;
 pub struct L2ArithmeticGeometricMean;
 pub struct L2GeometricMean;
 
-
 impl IdentificationStrategy for L2ArithmeticMean {
     fn identify(&self, grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {
         identify_no_sign(grid_values, weights, scaling);
@@ -82,7 +81,12 @@ impl IdentificationStrategy for L2ArithmeticGeometricMean {
     fn combine_values(&self, values: &[f64]) -> f64 {
         // Collect positive and negative values into vectors.
         let positive: Vec<f64> = values.iter().copied().filter(|v| *v >= 0.0).collect();
-        let negative: Vec<f64> = values.iter().copied().filter(|v| *v < 0.0).map(|v| -v).collect();
+        let negative: Vec<f64> = values
+            .iter()
+            .copied()
+            .filter(|v| *v < 0.0)
+            .map(|v| -v)
+            .collect();
 
         let positive_count = positive.len() as f64;
         let negative_count = negative.len() as f64;
@@ -115,10 +119,13 @@ impl IdentificationStrategy for L2GeometricMean {
     fn combine_values(&self, values: &[f64]) -> f64 {
         let sign = values.iter().map(|v| v.signum()).sum::<f64>().signum();
         let abs_values: Vec<f64> = values.iter().map(|v| v.abs()).collect();
-        let geom_mean = abs_values.iter().product::<f64>().powf(1.0 / abs_values.len() as f64);
+        let geom_mean = abs_values
+            .iter()
+            .product::<f64>()
+            .powf(1.0 / abs_values.len() as f64);
         sign * geom_mean
     }
-} 
+}
 
 pub enum SplitStrategy {
     Random(RandomSplit),
@@ -243,19 +250,6 @@ pub fn reproject_grid_values(
                 .collect()
         })
         .collect::<Vec<Vec<Vec<usize>>>>();
-    let weights: Vec<Vec<f64>> = (0..grid_values.len())
-        .map(|dim| {
-            (0..grid_values[dim].len())
-                .map(|idx| {
-                    grid_cells_along_dim[dim][idx]
-                        .iter()
-                        .map(|&cell_idx| grid_index.cells[cell_idx].len() as f64)
-                        .sum()
-                })
-                .collect::<Vec<f64>>()
-        })
-        .collect();
-
     for i in 0..MAX_PROJECTION_ITER {
         for (dim, curr_grid_values) in grid_values.iter_mut().enumerate() {
             for (idx, x) in curr_grid_values.iter_mut().enumerate() {
@@ -290,7 +284,6 @@ pub fn reproject_grid_values(
         let new_err = residuals.pow2().mean().unwrap();
         let diff = (new_err - err).abs();
         if diff < 1e-6 {
-            identify_no_sign(grid_values, &weights, scaling);
             break;
         }
         err = new_err;
@@ -420,7 +413,14 @@ where
     let mut combined_intervals: Vec<Vec<(f64, f64)>> = Vec::with_capacity(num_axes);
     let mut combined_grid_values: Vec<Vec<f64>> = Vec::with_capacity(num_axes);
 
-    let scalings: Vec<f64> = grids.iter().map(|grid| grid.scaling).collect();
+    let scalings: Vec<f64> = grids
+        .iter()
+        .zip(&aligned_signs)
+        .map(|(grid, signs)| {
+            let total_sign = signs.iter().product::<f64>();
+            grid.scaling * total_sign
+        })
+        .collect();
     let combined_scaling = combine_method.combine_values(&scalings);
 
     // Process each axis separately.

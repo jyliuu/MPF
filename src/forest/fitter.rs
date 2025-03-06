@@ -11,7 +11,7 @@ use super::{params::MPFBoostedParams, MPF};
 pub fn fit_boosted(
     x: ArrayView2<f64>,
     y: ArrayView1<f64>,
-hyperparameters: &MPFBoostedParams,
+    hyperparameters: &MPFBoostedParams,
 ) -> (FitResult, MPF<TreeGridFamily<BoostedVariant>>) {
     let mut rng = StdRng::seed_from_u64(hyperparameters.seed);
     let MPFBoostedParams {
@@ -27,6 +27,7 @@ hyperparameters: &MPFBoostedParams,
     for _ in 0..*epochs {
         let (fit_result, tree_grid_family) = fit(x.view(), y_new.view(), tgf_params, &mut rng);
         tree_grid_families.push(tree_grid_family);
+        println!("Epoch error: {:?}", fit_result.err);
         y_new = fit_result.residuals;
     }
 
@@ -43,7 +44,7 @@ hyperparameters: &MPFBoostedParams,
 mod tests {
     use crate::{
         forest::{fitter::fit_boosted, params::MPFBoostedParamsBuilder},
-        grid::params::SplitStrategyParams,
+        grid::params::{IdentificationStrategyParams, SplitStrategyParams},
         test_data::setup_data_csv,
         FittedModel,
     };
@@ -148,6 +149,30 @@ mod tests {
     }
 
     #[test]
+
+    fn test_fit_result_error_is_y_minus_sum_preds() {
+        let (x, y) = setup_data_csv();
+        let params = MPFBoostedParamsBuilder::new()
+            .epochs(10)
+            .n_trees(10)
+            .n_iter(10)
+            .seed(42)
+            .build();
+        let (fit_result, model) = fit_boosted(x.view(), y.view(), &params);
+        let preds = model.predict(x.view());
+        let err = y
+            .view()
+            .iter()
+            .zip(preds.iter())
+            .map(|(y, p)| (y - p).powi(2))
+            .sum::<f64>()
+            .div(y.len() as f64);
+
+        assert!((fit_result.err - err).abs() < 1e-15);
+    }
+
+
+    #[test]
     fn test_mpf_housing() {
         use crate::test_data::setup_data_housing_csv;
 
@@ -158,11 +183,12 @@ mod tests {
 
         // Use builder pattern for cleaner parameter construction
         let params = MPFBoostedParamsBuilder::new()
-            .epochs(10)
-            .n_trees(300)
-            .n_iter(20) // Using default, but explicitly stated for clarity
-            .split_strategy(SplitStrategyParams::IntervalRandomSplit {
-                split_try: 3,
+            .epochs(40)
+            .n_iter(120) // Using default, but explicitly stated for clarity
+            .n_trees(4)
+            .identification_strategy(IdentificationStrategyParams::L2ArithmeticGeometricMean)
+            .split_strategy(SplitStrategyParams::RandomSplit {
+                split_try: 12,
                 colsample_bytree: 1.0,
             })
             .build();

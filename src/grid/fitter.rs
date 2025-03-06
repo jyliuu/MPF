@@ -11,7 +11,7 @@ use crate::grid::FittedTreeGrid;
 use super::candidates::RefineCandidate;
 use super::gridindex::GridIndex;
 use super::params::IdentificationStrategyParams;
-use super::strategies::{reproject_grid_values, IntervalRandomSplit};
+use super::strategies::{identify_no_sign, reproject_grid_values, IntervalRandomSplit};
 
 pub fn fit<R: Rng + ?Sized>(
     x: ArrayView2<f64>,
@@ -178,6 +178,16 @@ impl<'a> TreeGridFitter<'a> {
                 &mut self.grid_values,
                 &mut self.scaling,
             );
+        }
+        if identified {
+            let weights: Vec<Vec<f64>> = self
+                .grid_index
+                .observation_counts
+                .iter()
+                .map(|v| v.iter().map(|&x| x as f64).collect())
+                .collect();
+
+            identify_no_sign(&mut self.grid_values, &weights, &mut self.scaling);
         }
 
         let residuals = self.residuals;

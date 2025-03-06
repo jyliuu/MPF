@@ -12,6 +12,7 @@ pub struct GridIndex {
     /// These boundaries partition each axis into intervals.
     pub boundaries: Vec<Vec<f64>>,
     pub intervals: Vec<Vec<(f64, f64)>>,
+    pub observation_counts: Vec<Vec<usize>>,
     /// Flattened grid cells. Each cell holds a vector of point indices.
     /// The flat index is computed using precomputed strides.
     pub cells: Vec<Vec<usize>>,
@@ -33,9 +34,11 @@ impl GridIndex {
         // Only one cell, containing all point indices.
         let cells = vec![(0..n).collect()];
         let intervals = vec![vec![(f64::NEG_INFINITY, f64::INFINITY)]; p];
+        let observation_counts = vec![vec![n]; p];
         GridIndex {
             boundaries,
             intervals,
+            observation_counts,
             cells,
             strides,
         }
@@ -67,6 +70,7 @@ impl GridIndex {
         let mut grid_index = GridIndex {
             boundaries,
             intervals,
+            observation_counts: vec![],
             cells: vec![],
             strides: Self::compute_strides(&dims),
         };
@@ -94,16 +98,18 @@ impl GridIndex {
 
     /// Given a single point (as an ArrayView1) and the current boundaries,
     /// compute its flat cell index.
-    fn compute_cell_index_for_point(&self, point: ArrayView1<f64>) -> usize {
+    fn compute_cell_index_for_point(&self, point: ArrayView1<f64>) -> (usize, Vec<usize>) {
         let mut index = 0;
         // For each axis, perform a binary search in the boundaries.
         // The resulting position is the cell index along that axis.
+        let mut cartesian_index = vec![0; self.boundaries.len()];
         for (j, &coord) in point.iter().enumerate() {
             // binary_search returns Ok(pos) if equal or Err(pos) where pos is the number of boundaries less than the value.
             let pos = self.compute_col_index_for_point(j, coord);
             index += pos * self.strides[j];
+            cartesian_index[j] = pos;
         }
-        index
+        (index, cartesian_index)
     }
 
     pub fn compute_col_index_for_point(&self, col: usize, point: f64) -> usize {
@@ -124,12 +130,18 @@ impl GridIndex {
         let total_cells: usize = dims.iter().product();
         // Create a new vector of empty cells.
         let mut new_cells = vec![Vec::new(); total_cells];
+        let mut new_observation_counts: Vec<Vec<usize>> =
+            dims.iter().map(|d| vec![0; *d]).collect();
         for i in 0..points.nrows() {
             let point = points.row(i);
-            let cell_index = self.compute_cell_index_for_point(point);
+            let (cell_index, cartesian_index) = self.compute_cell_index_for_point(point);
             new_cells[cell_index].push(i);
+            for (j, &idx) in cartesian_index.iter().enumerate() {
+                new_observation_counts[j][idx] += 1;
+            }
         }
         self.cells = new_cells;
+        self.observation_counts = new_observation_counts;
     }
 
     /// Splits the grid globally along the given axis by inserting `split` as a new boundary.

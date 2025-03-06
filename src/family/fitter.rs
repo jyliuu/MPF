@@ -6,7 +6,8 @@ use crate::{
         self,
         params::IdentificationStrategyParams,
         strategies::{
-            combine_into_single_tree_grid, L2ArithmeticGeometricMean, L2ArithmeticMean, L2GeometricMean, L2Median
+            combine_into_single_tree_grid, L2ArithmeticGeometricMean, L2ArithmeticMean,
+            L2GeometricMean, L2Median,
         },
     },
     FitResult, FittedModel,
@@ -48,7 +49,6 @@ pub fn fit<R: Rng + ?Sized>(
             } else {
                 grid::fit(x.view(), y.view(), tg_params, &mut thread_rng)
             };
-            println!("err: {:?}", fit_res.err);
             tg
         })
         .collect();
@@ -68,7 +68,6 @@ pub fn fit<R: Rng + ?Sized>(
             } else {
                 grid::fit(x.view(), y.view(), tg_params, &mut thread_rng)
             };
-            println!("err: {:?}", fit_res.err);
             tg
         })
         .collect();
@@ -87,9 +86,11 @@ pub fn fit<R: Rng + ?Sized>(
         IdentificationStrategyParams::L2ArithmeticGeometricMean => Some(
             combine_into_single_tree_grid(&tree_grids, &L2ArithmeticGeometricMean, x.view()),
         ),
-        IdentificationStrategyParams::L2GeometricMean => Some(
-            combine_into_single_tree_grid(&tree_grids, &L2GeometricMean, x.view()),
-        ),
+        IdentificationStrategyParams::L2GeometricMean => Some(combine_into_single_tree_grid(
+            &tree_grids,
+            &L2GeometricMean,
+            x.view(),
+        )),
         _ => None,
     };
     let tgf = TreeGridFamily(tree_grids, BoostedVariant { combined_tree_grid });
@@ -116,7 +117,10 @@ mod tests {
         family::{fitter::fit, params::TreeGridFamilyBoostedParams},
         grid::{
             params::TreeGridParams,
-            strategies::{combine_into_single_tree_grid, L2ArithmeticGeometricMean, L2ArithmeticMean, L2GeometricMean, L2Median},
+            strategies::{
+                combine_into_single_tree_grid, L2ArithmeticGeometricMean, L2ArithmeticMean,
+                L2GeometricMean, L2Median,
+            },
         },
         test_data::setup_data_csv,
         FittedModel,
