@@ -14,6 +14,8 @@ pub enum SplitStrategyParams {
 pub enum IdentificationStrategyParams {
     L2ArithMean,
     L2Median,
+    L2ArithmeticGeometricMean,
+    L2GeometricMean,
     None,
 }
 

@@ -11,7 +11,7 @@ use super::{params::MPFBoostedParams, MPF};
 pub fn fit_boosted(
     x: ArrayView2<f64>,
     y: ArrayView1<f64>,
-    hyperparameters: &MPFBoostedParams,
+hyperparameters: &MPFBoostedParams,
 ) -> (FitResult, MPF<TreeGridFamily<BoostedVariant>>) {
     let mut rng = StdRng::seed_from_u64(hyperparameters.seed);
     let MPFBoostedParams {

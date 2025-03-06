@@ -155,6 +155,7 @@ impl MPFBoostedPy {
         colsample_bytree: f64,
         split_strategy: u8,
         identification: u8,
+        reproject_grid_values: bool,
         seed: u64,
     ) -> PyResult<(MPFBoostedPy, FitResultPy)> {
         let x = x.as_array();
@@ -179,9 +180,12 @@ impl MPFBoostedPy {
                     colsample_bytree,
                 },
             })
+            .reproject_grid_values(reproject_grid_values)
             .identification_strategy(match identification {
                 1 => IdentificationStrategyParams::L2ArithMean,
                 2 => IdentificationStrategyParams::L2Median,
+                3 => IdentificationStrategyParams::L2ArithmeticGeometricMean,
+                4 => IdentificationStrategyParams::L2GeometricMean,
                 _ => IdentificationStrategyParams::None,
             })
             .seed(seed)

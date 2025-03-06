@@ -10,6 +10,9 @@ pub trait IdentificationStrategy: Send + Sync + 'static {
 
 pub struct L2ArithmeticMean;
 pub struct L2Median;
+pub struct L2ArithmeticGeometricMean;
+pub struct L2GeometricMean;
+
 
 impl IdentificationStrategy for L2ArithmeticMean {
     fn identify(&self, grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {
@@ -70,6 +73,52 @@ impl IdentificationStrategy for L2Median {
         }
     }
 }
+
+impl IdentificationStrategy for L2ArithmeticGeometricMean {
+    fn identify(&self, grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {
+        identify_no_sign(grid_values, weights, scaling);
+    }
+
+    fn combine_values(&self, values: &[f64]) -> f64 {
+        // Collect positive and negative values into vectors.
+        let positive: Vec<f64> = values.iter().copied().filter(|v| *v >= 0.0).collect();
+        let negative: Vec<f64> = values.iter().copied().filter(|v| *v < 0.0).map(|v| -v).collect();
+
+        let positive_count = positive.len() as f64;
+        let negative_count = negative.len() as f64;
+
+        // Guard against division by zero.
+        let positive_geom_mean = if positive_count > 0.0 {
+            let positive_product: f64 = positive.iter().product();
+            positive_product.powf(1.0 / positive_count)
+        } else {
+            0.0
+        };
+
+        let negative_geom_mean = if negative_count > 0.0 {
+            let negative_product: f64 = negative.iter().product();
+            negative_product.powf(1.0 / negative_count)
+        } else {
+            0.0
+        };
+
+        (positive_count * positive_geom_mean - negative_count * negative_geom_mean)
+            / (positive_count + negative_count)
+    }
+}
+
+impl IdentificationStrategy for L2GeometricMean {
+    fn identify(&self, grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {
+        identify_no_sign(grid_values, weights, scaling);
+    }
+
+    fn combine_values(&self, values: &[f64]) -> f64 {
+        let sign = values.iter().map(|v| v.signum()).sum::<f64>().signum();
+        let abs_values: Vec<f64> = values.iter().map(|v| v.abs()).collect();
+        let geom_mean = abs_values.iter().product::<f64>().powf(1.0 / abs_values.len() as f64);
+        sign * geom_mean
+    }
+} 
 
 pub enum SplitStrategy {
     Random(RandomSplit),

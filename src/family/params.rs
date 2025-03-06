@@ -65,6 +65,13 @@ impl TreeGridFamilyBoostedParamsBuilder {
         self
     }
 
+    pub fn reproject_grid_values(mut self, reproject_grid_values: bool) -> Self {
+        self.tg_params_builder = self
+            .tg_params_builder
+            .reproject_grid_values(reproject_grid_values);
+        self
+    }
+
     pub fn build(self) -> TreeGridFamilyBoostedParams {
         TreeGridFamilyBoostedParams {
             n_trees: self.n_trees,

@@ -85,6 +85,8 @@ IDENTIFICATION_STRATEGY_MAP = {
     "none": 0,
     "l2_arith_mean": 1,
     "l2_median": 2,
+    "l2_arith_geom_mean": 3,
+    "l2_geom_mean": 4,
 }
 
 SPLIT_STRATEGY_MAP = {
@@ -111,6 +113,7 @@ class MPF:
             colsample_bytree: float,
             split_strategy: str = "random",
             identification: str = "l2_arith_mean",
+            reproject_grid_values: bool = True,
             identified: bool = False,
             seed: int = 42
         ) -> tuple["MPF.Boosted", "FitResult"]:
@@ -123,6 +126,7 @@ class MPF:
                 colsample_bytree, 
                 split_strategy,
                 identification_strategy, 
+                reproject_grid_values,
                 seed
             )
             instance = cls(mpf_boosted)

@@ -5,7 +5,9 @@ use crate::{
     grid::{
         self,
         params::IdentificationStrategyParams,
-        strategies::{combine_into_single_tree_grid, L2ArithmeticMean, L2Median},
+        strategies::{
+            combine_into_single_tree_grid, L2ArithmeticGeometricMean, L2ArithmeticMean, L2GeometricMean, L2Median
+        },
     },
     FitResult, FittedModel,
 };
@@ -82,6 +84,12 @@ pub fn fit<R: Rng + ?Sized>(
             &L2Median,
             x.view(),
         )),
+        IdentificationStrategyParams::L2ArithmeticGeometricMean => Some(
+            combine_into_single_tree_grid(&tree_grids, &L2ArithmeticGeometricMean, x.view()),
+        ),
+        IdentificationStrategyParams::L2GeometricMean => Some(
+            combine_into_single_tree_grid(&tree_grids, &L2GeometricMean, x.view()),
+        ),
         _ => None,
     };
     let tgf = TreeGridFamily(tree_grids, BoostedVariant { combined_tree_grid });
@@ -108,14 +116,14 @@ mod tests {
         family::{fitter::fit, params::TreeGridFamilyBoostedParams},
         grid::{
             params::TreeGridParams,
-            strategies::{combine_into_single_tree_grid, L2Median},
+            strategies::{combine_into_single_tree_grid, L2ArithmeticGeometricMean, L2ArithmeticMean, L2GeometricMean, L2Median},
         },
         test_data::setup_data_csv,
         FittedModel,
     };
 
     #[test]
-    fn test_combined_tree_grid_predicts_well() {
+    fn test_l2_mediann_combined_tree_grid_predicts_well() {
         let (x, y) = setup_data_csv();
         let mut rng = StdRng::seed_from_u64(42);
         let tgf = fit(
@@ -129,6 +137,72 @@ mod tests {
             &mut rng,
         );
         let combined_tree_grid = combine_into_single_tree_grid(&tgf.1 .0, &L2Median, x.view());
+        let pred = combined_tree_grid.predict(x.view());
+        let err = (y - pred).powi(2).mean().unwrap();
+        println!("err: {:?}", err);
+        assert!(err < 0.1);
+    }
+
+    #[test]
+    fn test_l2_arith_geom_mean_combined_tree_grid_predicts_well() {
+        let (x, y) = setup_data_csv();
+        let mut rng = StdRng::seed_from_u64(42);
+        let tgf = fit(
+            x.view(),
+            y.view(),
+            &TreeGridFamilyBoostedParams {
+                n_trees: 20,
+                bootstrap: false,
+                tg_params: TreeGridParams::default(),
+            },
+            &mut rng,
+        );
+        let combined_tree_grid =
+            combine_into_single_tree_grid(&tgf.1 .0, &L2ArithmeticGeometricMean, x.view());
+        let pred = combined_tree_grid.predict(x.view());
+        let err = (y - pred).powi(2).mean().unwrap();
+        println!("err: {:?}", err);
+        assert!(err < 0.1);
+    }
+
+    #[test]
+    fn test_l2_arith_mean_combined_tree_grid_predicts_well() {
+        let (x, y) = setup_data_csv();
+        let mut rng = StdRng::seed_from_u64(42);
+        let tgf = fit(
+            x.view(),
+            y.view(),
+            &TreeGridFamilyBoostedParams {
+                n_trees: 20,
+                bootstrap: false,
+                tg_params: TreeGridParams::default(),
+            },
+            &mut rng,
+        );
+        let combined_tree_grid =
+            combine_into_single_tree_grid(&tgf.1 .0, &L2ArithmeticMean, x.view());
+        let pred = combined_tree_grid.predict(x.view());
+        let err = (y - pred).powi(2).mean().unwrap();
+        println!("err: {:?}", err);
+        assert!(err < 0.1);
+    }
+
+    #[test]
+    fn test_l2_geom_mean_combined_tree_grid_predicts_well() {
+        let (x, y) = setup_data_csv();
+        let mut rng = StdRng::seed_from_u64(42);
+        let tgf = fit(
+            x.view(),
+            y.view(),
+            &TreeGridFamilyBoostedParams {
+                n_trees: 20,
+                bootstrap: false,
+                tg_params: TreeGridParams::default(),
+            },
+            &mut rng,
+        );
+        let combined_tree_grid =
+            combine_into_single_tree_grid(&tgf.1 .0, &L2GeometricMean, x.view());
         let pred = combined_tree_grid.predict(x.view());
         let err = (y - pred).powi(2).mean().unwrap();
         println!("err: {:?}", err);

@@ -56,6 +56,13 @@ impl MPFBoostedParamsBuilder {
         self
     }
 
+    pub fn reproject_grid_values(mut self, reproject_grid_values: bool) -> Self {
+        self.tgf_params_builder = self
+            .tgf_params_builder
+            .reproject_grid_values(reproject_grid_values);
+        self
+    }
+
     pub fn identification_strategy(
         mut self,
         identification_strategy: IdentificationStrategyParams,
