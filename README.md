@@ -1,4 +1,4 @@
-# MPF - Multi-Partitioned Forest
+# MPF - Multi-Partitioned Forest (Work In Progress)
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -55,7 +55,7 @@ This structure naturally decomposes the function into interpretable main effects
 
 ```python
 import numpy as np
-from mpf_py import MPF
+from mpf_py import MPF, TreeGrid
 from sklearn.model_selection import train_test_split
 
 # Prepare data
@@ -67,11 +67,12 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 model, fit_result = MPF.fit_boosted(
     X_train, y_train,
     epochs=3,
-    n_trees1,
+    n_trees=1,
     n_iter=260,
     split_try=20,
     colsample_bytree=1.0,
-    identified=True,
+    identification='l2_arith_geom_mean',
+    reproject_grid_values=True,
     seed=1  # Set seed for reproducibility
 )
 
@@ -111,19 +112,16 @@ fn main() {
     let y: Array1<f64> = /* your targets */;
 
     // Fit MPF model with reproducible results
-    let params = MPFBoostedParams {
-        epochs: 5,
-        tgf_params: TreeGridFamilyBoostedParams {
-            B: 100,
-            tg_params: TreeGridParams {
-                n_iter: 100,
-                split_try: 10,
-                colsample_bytree: 1.0,
-                identified: true,
-            },
-        },
-        seed: 42,  // Set seed for reproducibility
-    };
+    let params = MPFBoostedParamsBuilder::new()
+        .epochs(40)
+        .n_iter(120) // Using default, but explicitly stated for clarity
+        .n_trees(4)
+        .identification_strategy(IdentificationStrategyParams::L2ArithmeticGeometricMean)
+        .split_strategy(SplitStrategyParams::RandomSplit {
+            split_try: 12,
+            colsample_bytree: 1.0,
+        })
+        .build();
     
     let (fit_result, model) = fit_boosted(x.view(), y.view(), &params);
 
@@ -135,44 +133,52 @@ fn main() {
 ## Project Structure
 
 ```
-MPF/
-├── src/                # Core Rust implementation
-│   ├── forest/         # MPF algorithm implementation
-│   │   ├── forest_fitter.rs  # Main fitting algorithms
-│   │   └── mpf.rs      # MPF model definition
-│   ├── tree_grid/      # Tree grid implementation
-│   │   ├── family/     # Tree grid family variants
-│   │   └── grid/       # Base tree grid functionality
-│   └── lib.rs          # Main library exports
-├── mpf-py/             # Python interface
-│   ├── src/            # Rust-Python bindings
-│   ├── tests/          # Python interface tests
-│   └── python/         # Python package code
-└── README.md           # Project documentation
+rpf-rust/
+├── benches/             # Benchmarking code
+│   └── tree_grid_fitter.rs
+├── data/                # Sample datasets
+│   ├── dat.csv
+│   └── housing.csv
+├── mpf-py/              # Python interface
+│   ├── notebooks/       # Example notebooks and scripts
+│   ├── python/          # Python package code
+│   │   ├── mpf_py/
+│   │   ├── example.py
+│   │   └── main.py
+│   ├── src/             # Rust-Python bindings
+│   │   └── lib.rs
+│   ├── tests/           # Python interface tests
+│   │   ├── test_models.py
+│   │   └── test_reproducibility.py
+│   └── pyproject.toml   # Python package configuration
+├── src/                 # Core Rust implementation
+│   ├── family/          # Family implementation
+│   │   ├── fitter.rs
+│   │   └── params.rs
+│   ├── forest/          # Forest implementation
+│   │   ├── fitter.rs
+│   │   └── params.rs
+│   ├── grid/            # Grid implementation
+│   │   ├── candidates.rs
+│   │   ├── fitter.rs
+│   │   ├── gridindex.rs
+│   │   ├── params.rs
+│   │   └── strategies.rs
+│   ├── family.rs        # Family module exports
+│   ├── forest.rs        # Forest module exports
+│   ├── grid.rs          # Grid module exports
+│   └── lib.rs           # Main library exports
+├── tests/               # Rust tests
+│   ├── family.rs
+│   ├── forest.rs
+│   ├── test_data.rs
+│   └── tree_grid.rs
+├── Cargo.toml           # Rust package configuration
+└── README.md            # Project documentation
 ```
 
 ## API Documentation
-
-### Python API
-
-#### MPF
-- `fit_boosted(X, y, epochs, B, n_iter, split_try, colsample_bytree, identified, seed)`: Fit model to data
-- `predict(X)`: Make predictions
-- `get_tree_grid_families()`: Access internal tree grid families
-
-#### TreeGridFamily
-- `get_tree_grids()`: Get individual tree grids
-- `predict(X)`: Make predictions using this family
-
-### Rust API
-
-#### Main Functions
-- `fit_boosted()`: Fit MPF model with bagging
-
-#### Types
-- `MPFBoostedParams`: Parameters for boosted MPF
-- `TreeGridFamilyBoostedParams`: Parameters for boosted tree grid family
-- `TreeGridParams`: Base tree grid parameters
+Coming soon...
 
 ## License
 
