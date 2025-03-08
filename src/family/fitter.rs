@@ -28,6 +28,7 @@ pub fn fit<R: Rng + ?Sized>(
         n_trees,
         bootstrap,
         tg_params,
+        combination_strategy,
     } = hyperparameters;
     let n = x.nrows();
 
@@ -85,33 +86,34 @@ pub fn fit<R: Rng + ?Sized>(
 
     println!("reference: {:?}", fit_results[ref_idx].err);
 
-    let combined_tree_grid = match tg_params.combination_strategy_params {
-        CombinationStrategyParams::ArithMean => Some(combine_into_single_tree_grid(
-            &tree_grids,
-            reference,
-            &ArithmeticMean,
-            x.view(),
-        )),
-        CombinationStrategyParams::Median => Some(combine_into_single_tree_grid(
-            &tree_grids,
-            reference,
-            &Median,
-            x.view(),
-        )),
-        CombinationStrategyParams::ArithmeticGeometricMean => Some(combine_into_single_tree_grid(
-            &tree_grids,
-            reference,
-            &ArithmeticGeometricMean,
-            x.view(),
-        )),
-        CombinationStrategyParams::GeometricMean => Some(combine_into_single_tree_grid(
-            &tree_grids,
-            reference,
-            &GeometricMean,
-            x.view(),
-        )),
-        _ => None,
-    };
+    let combined_tree_grid =
+        match *combination_strategy {
+            CombinationStrategyParams::ArithMean => Some(combine_into_single_tree_grid::<ArithmeticMean>(
+                &tree_grids,
+                reference,
+                x.view(),
+            )),
+            CombinationStrategyParams::Median => Some(combine_into_single_tree_grid::<Median>(
+                &tree_grids,
+                reference,
+                x.view(),
+            )),
+            CombinationStrategyParams::ArithmeticGeometricMean => Some(
+                combine_into_single_tree_grid::<ArithmeticGeometricMean>(
+                    &tree_grids,
+                    reference,
+                    x.view(),
+                ),
+            ),
+            CombinationStrategyParams::GeometricMean => Some(
+                combine_into_single_tree_grid::<GeometricMean>(
+                    &tree_grids,
+                    reference,
+                    x.view(),
+                ),
+            ),
+            _ => None,
+        };
     let mut tgf = TreeGridFamily(tree_grids, BoostedVariant { combined_tree_grid });
     let mut preds = tgf.predict(x);
 

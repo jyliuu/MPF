@@ -11,7 +11,7 @@ use mpf::{
     forest::{fit_boosted, params::MPFBoostedParamsBuilder, MPF},
     grid::{
         self,
-        params::{CombinationStrategyParams, SplitStrategyParams},
+        params::{CombinationStrategyParams, IdentificationStrategyParams, SplitStrategyParams},
         FittedTreeGrid, TreeGridParamsBuilder,
     },
     FitResult, FittedModel,
@@ -154,6 +154,7 @@ impl MPFBoostedPy {
         split_try: usize,
         colsample_bytree: f64,
         split_strategy: u8,
+        identification_strategy: u8,
         combination_strategy: u8,
         reproject_grid_values: bool,
         seed: u64,
@@ -187,6 +188,11 @@ impl MPFBoostedPy {
                 3 => CombinationStrategyParams::ArithmeticGeometricMean,
                 4 => CombinationStrategyParams::GeometricMean,
                 _ => CombinationStrategyParams::None,
+            })
+            .identification_strategy(match identification_strategy {
+                1 => IdentificationStrategyParams::L1,
+                2 => IdentificationStrategyParams::L2,
+                _ => IdentificationStrategyParams::None,
             })
             .seed(seed)
             .build();
@@ -241,7 +247,7 @@ impl TreeGridPy {
         n_iter: usize,
         split_try: usize,
         colsample_bytree: f64,
-        combination_strategy: usize,
+        identification_strategy: usize,
         seed: u64,
     ) -> PyResult<(TreeGridPy, FitResultPy)> {
         let x = x.as_array();
@@ -252,12 +258,10 @@ impl TreeGridPy {
                 split_try,
                 colsample_bytree,
             })
-            .combination_strategy(match combination_strategy {
-                1 => CombinationStrategyParams::ArithMean,
-                2 => CombinationStrategyParams::Median,
-                3 => CombinationStrategyParams::ArithmeticGeometricMean,
-                4 => CombinationStrategyParams::GeometricMean,
-                _ => CombinationStrategyParams::None,
+            .identification_strategy(match identification_strategy {
+                1 => IdentificationStrategyParams::L1,
+                2 => IdentificationStrategyParams::L2,
+                _ => IdentificationStrategyParams::None,
             })
             .build();
         let mut rng = StdRng::seed_from_u64(seed);

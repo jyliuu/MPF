@@ -10,8 +10,11 @@ use crate::grid::FittedTreeGrid;
 
 use super::candidates::RefineCandidate;
 use super::gridindex::GridIndex;
-use super::params::CombinationStrategyParams;
-use super::strategies::{identify_no_sign, reproject_grid_values, IntervalRandomSplit};
+use super::params::IdentificationStrategyParams;
+use super::strategies::{
+    reproject_grid_values, IdentificationStrategy, IntervalRandomSplit,
+    L1Identification, L2Identification,
+};
 
 pub fn fit<R: Rng + ?Sized>(
     x: ArrayView2<f64>,
@@ -38,18 +41,40 @@ pub fn fit<R: Rng + ?Sized>(
         }),
     };
 
-    let identified = !matches!(
-        hyperparameters.combination_strategy_params,
-        CombinationStrategyParams::None
-    );
-
-    fitter.fit(
+    let (fit_res, mut tree_grid) = fitter.fit(
         hyperparameters.n_iter,
         hyperparameters.reproject_grid_values,
-        identified,
         &split_strategy,
         rng,
-    )
+    );
+
+    if hyperparameters.identification_strategy_params != IdentificationStrategyParams::None {
+        let weights: Vec<Vec<f64>> = tree_grid
+            .grid_index
+            .observation_counts
+            .iter()
+            .map(|v| v.iter().map(|&x| x as f64).collect())
+            .collect();
+        match hyperparameters.identification_strategy_params {
+            IdentificationStrategyParams::L1 => {
+                L1Identification::identify(
+                    &mut tree_grid.grid_values,
+                    &weights,
+                    &mut tree_grid.scaling,
+                );
+            }
+            IdentificationStrategyParams::L2 => {
+                L2Identification::identify(
+                    &mut tree_grid.grid_values,
+                    &weights,
+                    &mut tree_grid.scaling,
+                );
+            }
+            IdentificationStrategyParams::None => unreachable!(),
+        }
+    }
+
+    (fit_res, tree_grid)
 }
 
 #[derive(Debug)]
@@ -118,16 +143,12 @@ impl<'a> TreeGridFitter<'a> {
         mut self,
         n_iter: usize,
         reproject: bool,
-        identified: bool,
         split_strategy: &SplitStrategy,
         rng: &mut R,
     ) -> (FitResult, FittedTreeGrid)
     where
         R: Rng + ?Sized,
     {
-        let n_cols = self.x.ncols();
-        let n_rows = self.x.nrows();
-
         // Main fitting loop
         for iter in 0..n_iter {
             let intervals = &self.grid_index.intervals;
@@ -176,16 +197,6 @@ impl<'a> TreeGridFitter<'a> {
                 &self.grid_index,
                 &mut self.grid_values,
             );
-        }
-        if identified {
-            let weights: Vec<Vec<f64>> = self
-                .grid_index
-                .observation_counts
-                .iter()
-                .map(|v| v.iter().map(|&x| x as f64).collect())
-                .collect();
-
-            identify_no_sign(&mut self.grid_values, &weights, &mut self.scaling);
         }
 
         let residuals = self.residuals;

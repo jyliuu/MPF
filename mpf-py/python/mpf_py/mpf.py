@@ -5,6 +5,24 @@ from mpf_py._mpf_py import FitResult
 from mpf_py.wrapper import PythonWrapperClassBase
 
 
+COMBINATION_STRATEGY_MAP = {
+    "none": 0,
+    "arith_mean": 1,
+    "median": 2,
+    "arith_geom_mean": 3,
+    "geom_mean": 4,
+}
+
+IDENTIFICATION_STRATEGY_MAP = {
+    "none": 0,
+    "l1": 1,
+    "l2": 2,
+}
+
+SPLIT_STRATEGY_MAP = {
+    "random": 1,
+    "interval_random": 2,
+}
 
 class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
     
@@ -20,11 +38,11 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
         n_iter: int,
         split_try: int, 
         colsample_bytree: float,
-        combination_strategy: str = "arith_mean",
+        identification_strategy: str = "l2",
         seed: int = 42
     ) -> tuple["TreeGrid", "FitResult"]:
-        combination_strategy = int(COMBINATION_STRATEGY_MAP[combination_strategy])
-        tg, fr = _TreeGrid.fit(x, y, n_iter, split_try, colsample_bytree, combination_strategy, seed)
+        identification_strategy = int(IDENTIFICATION_STRATEGY_MAP[identification_strategy])
+        tg, fr = _TreeGrid.fit(x, y, n_iter, split_try, colsample_bytree, identification_strategy, combination_strategy, seed)
         return cls(tg), fr
 
 
@@ -95,19 +113,6 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
             plt.show()
 
 
-COMBINATION_STRATEGY_MAP = {
-    "none": 0,
-    "arith_mean": 1,
-    "median": 2,
-    "arith_geom_mean": 3,
-    "geom_mean": 4,
-}
-
-SPLIT_STRATEGY_MAP = {
-    "random": 1,
-    "interval_random": 2,
-}
-
 class MPF:
 
     class Boosted(PythonWrapperClassBase, RustClass=_MPFBoosted):
@@ -126,18 +131,20 @@ class MPF:
             split_try: int, 
             colsample_bytree: float,
             split_strategy: str = "random",
+            identification_strategy: str = "l2",
             combination_strategy: str = "arith_mean",
             reproject_grid_values: bool = True,
             seed: int = 42
         ) -> tuple["MPF.Boosted", "FitResult"]:
             split_strategy = SPLIT_STRATEGY_MAP[split_strategy]
             combination_strategy = int(COMBINATION_STRATEGY_MAP[combination_strategy])
-            
+            identification_strategy = int(IDENTIFICATION_STRATEGY_MAP[identification_strategy])
             mpf_boosted, fr = _MPFBoosted.fit(
                 x, y, 
                 epochs, n_trees, n_iter, split_try, 
                 colsample_bytree, 
                 split_strategy,
+                identification_strategy,
                 combination_strategy, 
                 reproject_grid_values,
                 seed

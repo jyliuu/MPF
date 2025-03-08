@@ -1,5 +1,5 @@
 use crate::grid::params::{
-    CombinationStrategyParams, SplitStrategyParams, TreeGridParams, TreeGridParamsBuilder,
+    CombinationStrategyParams, IdentificationStrategyParams, SplitStrategyParams, TreeGridParams, TreeGridParamsBuilder
 };
 
 #[derive(Debug, Clone)]
@@ -7,6 +7,7 @@ pub struct TreeGridFamilyBoostedParams {
     pub n_trees: usize,
     pub bootstrap: bool,
     pub tg_params: TreeGridParams,
+    pub combination_strategy: CombinationStrategyParams,
 }
 
 // Builder for TreeGridFamilyBoostedParams
@@ -15,6 +16,7 @@ pub struct TreeGridFamilyBoostedParamsBuilder {
     n_trees: usize,
     bootstrap: bool,
     tg_params_builder: TreeGridParamsBuilder,
+    combination_strategy: CombinationStrategyParams,
 }
 
 impl TreeGridFamilyBoostedParamsBuilder {
@@ -23,6 +25,7 @@ impl TreeGridFamilyBoostedParamsBuilder {
             n_trees: 100,
             bootstrap: false,
             tg_params_builder: TreeGridParamsBuilder::new(),
+            combination_strategy: CombinationStrategyParams::ArithMean,
         }
     }
 
@@ -48,9 +51,17 @@ impl TreeGridFamilyBoostedParamsBuilder {
     }
 
     pub fn combination_strategy(mut self, combination_strategy: CombinationStrategyParams) -> Self {
+        self.combination_strategy = combination_strategy;
+        self
+    }
+
+    pub fn identification_strategy(
+        mut self,
+        identification_strategy: IdentificationStrategyParams,
+    ) -> Self {
         self.tg_params_builder = self
             .tg_params_builder
-            .combination_strategy(combination_strategy);
+            .identification_strategy(identification_strategy);
         self
     }
 
@@ -66,6 +77,7 @@ impl TreeGridFamilyBoostedParamsBuilder {
             n_trees: self.n_trees,
             bootstrap: self.bootstrap,
             tg_params: self.tg_params_builder.build(),
+            combination_strategy: self.combination_strategy,
         }
     }
 }

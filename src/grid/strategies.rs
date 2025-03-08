@@ -3,8 +3,61 @@ use rand::{seq::index::sample, Rng};
 
 use super::{gridindex::GridIndex, FittedTreeGrid};
 
+pub trait IdentificationStrategy: Send + Sync + 'static {
+    fn identify(grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64);
+}
+
+pub struct L2Identification;
+pub struct L1Identification;
+
+impl IdentificationStrategy for L2Identification {
+    fn identify(grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {
+        for dim in 0..grid_values.len() {
+            let curr_weights = &weights[dim];
+            let curr_grid_values = &mut grid_values[dim];
+
+            let weights_sum: f64 = curr_weights.iter().sum();
+
+            let l2_weighted_norm = curr_grid_values
+                .iter()
+                .zip(curr_weights.iter())
+                .map(|(&x, &w)| x.powi(2) * w)
+                .sum::<f64>();
+
+            let scale = (l2_weighted_norm / weights_sum).sqrt();
+
+            curr_grid_values.iter_mut().for_each(|x| *x /= scale);
+            *scaling *= scale;
+        }
+    }
+}
+
+impl IdentificationStrategy for L1Identification {
+    fn identify(grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {
+        for dim in 0..grid_values.len() {
+            let curr_weights = &weights[dim];
+            let curr_grid_values = &mut grid_values[dim];
+
+            let weights_sum: f64 = curr_weights.iter().sum();
+
+            let l1_weighted_norm = curr_grid_values
+                .iter()
+                .zip(curr_weights.iter())
+                .map(|(&x, &w)| x.abs() * w)
+                .sum::<f64>();
+
+            let scale = l1_weighted_norm / weights_sum;
+
+            curr_grid_values.iter_mut().for_each(|x| *x /= scale);
+            *scaling *= scale;
+        }
+    }
+}
+
+pub fn identify_no_sign(grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {}
+
 pub trait CombinationStrategy: Send + Sync + 'static {
-    fn combine_values(&self, values: &[f64]) -> f64;
+    fn combine_values(values: &[f64]) -> f64;
 }
 
 pub struct ArithmeticMean;
@@ -13,13 +66,13 @@ pub struct ArithmeticGeometricMean;
 pub struct GeometricMean;
 
 impl CombinationStrategy for ArithmeticMean {
-    fn combine_values(&self, values: &[f64]) -> f64 {
+    fn combine_values(values: &[f64]) -> f64 {
         values.iter().sum::<f64>() / values.len() as f64
     }
 }
 
 impl CombinationStrategy for Median {
-    fn combine_values(&self, values: &[f64]) -> f64 {
+    fn combine_values(values: &[f64]) -> f64 {
         let len = values.len();
         if len == 0 {
             return 0.0; // Handle empty array case
@@ -65,7 +118,7 @@ impl CombinationStrategy for Median {
 }
 
 impl CombinationStrategy for ArithmeticGeometricMean {
-    fn combine_values(&self, values: &[f64]) -> f64 {
+    fn combine_values(values: &[f64]) -> f64 {
         // Collect positive and negative values into vectors.
         let positive: Vec<f64> = values.iter().copied().filter(|v| *v >= 0.0).collect();
         let negative: Vec<f64> = values
@@ -99,7 +152,7 @@ impl CombinationStrategy for ArithmeticGeometricMean {
 }
 
 impl CombinationStrategy for GeometricMean {
-    fn combine_values(&self, values: &[f64]) -> f64 {
+    fn combine_values(values: &[f64]) -> f64 {
         let sign = values.iter().map(|v| v.signum()).sum::<f64>().signum();
         let abs_values: Vec<f64> = values.iter().map(|v| v.abs()).collect();
         let geom_mean = abs_values
@@ -272,26 +325,6 @@ pub fn reproject_grid_values(
     err
 }
 
-pub fn identify_no_sign(grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {
-    for dim in 0..grid_values.len() {
-        let curr_weights = &weights[dim];
-        let curr_grid_values = &mut grid_values[dim];
-
-        let weights_sum: f64 = curr_weights.iter().sum();
-
-        let l2_weighted_norm = curr_grid_values
-            .iter()
-            .zip(curr_weights.iter())
-            .map(|(&x, &w)| x.powi(2) * w)
-            .sum::<f64>();
-
-        let scale = (l2_weighted_norm / weights_sum).sqrt();
-
-        curr_grid_values.iter_mut().for_each(|x| *x /= scale);
-        *scaling *= scale;
-    }
-}
-
 pub fn compute_inner_product(first: &FittedTreeGrid, second: &FittedTreeGrid, dim: usize) -> f64 {
     let first_splits = &first.grid_index.boundaries[dim];
     let first_intervals = &first.grid_index.intervals[dim];
@@ -372,7 +405,6 @@ pub fn get_aligned_signs_for_all_tree_grids(tree_grids: &[FittedTreeGrid]) -> Ve
 pub fn combine_into_single_tree_grid<I>(
     grids: &[FittedTreeGrid],
     reference: &FittedTreeGrid,
-    combine_method: &I,
     points: ArrayView2<f64>,
 ) -> FittedTreeGrid
 where
@@ -448,7 +480,7 @@ where
             let combined_val = if values.is_empty() {
                 0.0 // Or handle as NaN, or based on domain knowledge
             } else {
-                combine_method.combine_values(&values)
+                I::combine_values(&values)
             };
             new_grid_values.push(combined_val);
         }
