@@ -25,10 +25,10 @@ pub fn fit_boosted(
     let mut y_new = y.to_owned();
     let mut tree_grid_families = Vec::new();
 
-    for _ in 0..*epochs {
+    for i in 0..*epochs {
         let (fit_result, tree_grid_family) = fit(x.view(), y_new.view(), tgf_params, &mut rng);
         tree_grid_families.push(tree_grid_family);
-        println!("Epoch error: {:?}", fit_result.err);
+        println!("Epoch {}, error: {:?}", i, fit_result.err);
         y_new = fit_result.residuals;
     }
 
