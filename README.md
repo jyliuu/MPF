@@ -71,7 +71,7 @@ model, fit_result = MPF.fit_boosted(
     n_iter=260,
     split_try=20,
     colsample_bytree=1.0,
-    identification='l2_arith_geom_mean',
+    combination_strategy='l2_arith_geom_mean',
     reproject_grid_values=True,
     seed=1  # Set seed for reproducibility
 )
@@ -116,7 +116,7 @@ fn main() {
         .epochs(40)
         .n_iter(120) // Using default, but explicitly stated for clarity
         .n_trees(4)
-        .identification_strategy(IdentificationStrategyParams::L2ArithmeticGeometricMean)
+        .combination_strategy(CombinationStrategyParams::L2ArithmeticGeometricMean)
         .split_strategy(SplitStrategyParams::RandomSplit {
             split_try: 12,
             colsample_bytree: 1.0,

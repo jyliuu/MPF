@@ -4,10 +4,10 @@ use rand::{Rng, SeedableRng};
 use crate::{
     grid::{
         self,
-        params::IdentificationStrategyParams,
+        params::CombinationStrategyParams,
         strategies::{
-            combine_into_single_tree_grid, L2ArithmeticGeometricMean, L2ArithmeticMean,
-            L2GeometricMean, L2Median,
+            combine_into_single_tree_grid, ArithmeticGeometricMean, ArithmeticMean, GeometricMean,
+            Median,
         },
     },
     FitResult, FittedModel,
@@ -85,31 +85,29 @@ pub fn fit<R: Rng + ?Sized>(
 
     println!("reference: {:?}", fit_results[ref_idx].err);
 
-    let combined_tree_grid = match tg_params.identification_strategy_params {
-        IdentificationStrategyParams::L2ArithMean => Some(combine_into_single_tree_grid(
+    let combined_tree_grid = match tg_params.combination_strategy_params {
+        CombinationStrategyParams::ArithMean => Some(combine_into_single_tree_grid(
             &tree_grids,
             reference,
-            &L2ArithmeticMean,
+            &ArithmeticMean,
             x.view(),
         )),
-        IdentificationStrategyParams::L2Median => Some(combine_into_single_tree_grid(
+        CombinationStrategyParams::Median => Some(combine_into_single_tree_grid(
             &tree_grids,
             reference,
-            &L2Median,
+            &Median,
             x.view(),
         )),
-        IdentificationStrategyParams::L2ArithmeticGeometricMean => {
-            Some(combine_into_single_tree_grid(
-                &tree_grids,
-                reference,
-                &L2ArithmeticGeometricMean,
-                x.view(),
-            ))
-        }
-        IdentificationStrategyParams::L2GeometricMean => Some(combine_into_single_tree_grid(
+        CombinationStrategyParams::ArithmeticGeometricMean => Some(combine_into_single_tree_grid(
             &tree_grids,
             reference,
-            &L2GeometricMean,
+            &ArithmeticGeometricMean,
+            x.view(),
+        )),
+        CombinationStrategyParams::GeometricMean => Some(combine_into_single_tree_grid(
+            &tree_grids,
+            reference,
+            &GeometricMean,
             x.view(),
         )),
         _ => None,

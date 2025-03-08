@@ -11,7 +11,7 @@ use mpf::{
     forest::{fit_boosted, params::MPFBoostedParamsBuilder, MPF},
     grid::{
         self,
-        params::{IdentificationStrategyParams, SplitStrategyParams},
+        params::{CombinationStrategyParams, SplitStrategyParams},
         FittedTreeGrid, TreeGridParamsBuilder,
     },
     FitResult, FittedModel,
@@ -89,7 +89,7 @@ impl TreeGridFamilyBoostedPy {
             Ok(TreeGridPy::from(combined_tree_grid.clone()))
         } else {
             Err(PyErr::new::<pyo3::exceptions::PyAttributeError, _>(
-                "No combined tree grid, rerun with `identification='l2_arith_mean'` or `identification='l2_median'`!",
+                "No combined tree grid, rerun with `combination='arith_mean'` or `combination='median'`!",
             ))
         }
     }
@@ -154,7 +154,7 @@ impl MPFBoostedPy {
         split_try: usize,
         colsample_bytree: f64,
         split_strategy: u8,
-        identification: u8,
+        combination_strategy: u8,
         reproject_grid_values: bool,
         seed: u64,
     ) -> PyResult<(MPFBoostedPy, FitResultPy)> {
@@ -181,12 +181,12 @@ impl MPFBoostedPy {
                 },
             })
             .reproject_grid_values(reproject_grid_values)
-            .identification_strategy(match identification {
-                1 => IdentificationStrategyParams::L2ArithMean,
-                2 => IdentificationStrategyParams::L2Median,
-                3 => IdentificationStrategyParams::L2ArithmeticGeometricMean,
-                4 => IdentificationStrategyParams::L2GeometricMean,
-                _ => IdentificationStrategyParams::None,
+            .combination_strategy(match combination_strategy {
+                1 => CombinationStrategyParams::ArithMean,
+                2 => CombinationStrategyParams::Median,
+                3 => CombinationStrategyParams::ArithmeticGeometricMean,
+                4 => CombinationStrategyParams::GeometricMean,
+                _ => CombinationStrategyParams::None,
             })
             .seed(seed)
             .build();
@@ -241,7 +241,7 @@ impl TreeGridPy {
         n_iter: usize,
         split_try: usize,
         colsample_bytree: f64,
-        identified: bool,
+        combination_strategy: usize,
         seed: u64,
     ) -> PyResult<(TreeGridPy, FitResultPy)> {
         let x = x.as_array();
@@ -252,7 +252,13 @@ impl TreeGridPy {
                 split_try,
                 colsample_bytree,
             })
-            .identified(identified)
+            .combination_strategy(match combination_strategy {
+                1 => CombinationStrategyParams::ArithMean,
+                2 => CombinationStrategyParams::Median,
+                3 => CombinationStrategyParams::ArithmeticGeometricMean,
+                4 => CombinationStrategyParams::GeometricMean,
+                _ => CombinationStrategyParams::None,
+            })
             .build();
         let mut rng = StdRng::seed_from_u64(seed);
         let (fit_result, tg) = grid::fit(x.view(), y.view(), &params, &mut rng);
@@ -275,6 +281,5 @@ fn _mpf_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<TreeGridPy>()?;
     m.add_class::<FitResultPy>()?;
     m.add_class::<MPFBoostedPy>()?;
-
     Ok(())
 }

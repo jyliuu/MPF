@@ -3,31 +3,22 @@ use rand::{seq::index::sample, Rng};
 
 use super::{gridindex::GridIndex, FittedTreeGrid};
 
-pub trait IdentificationStrategy: Send + Sync + 'static {
-    fn identify(&self, grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64);
+pub trait CombinationStrategy: Send + Sync + 'static {
     fn combine_values(&self, values: &[f64]) -> f64;
 }
 
-pub struct L2ArithmeticMean;
-pub struct L2Median;
-pub struct L2ArithmeticGeometricMean;
-pub struct L2GeometricMean;
+pub struct ArithmeticMean;
+pub struct Median;
+pub struct ArithmeticGeometricMean;
+pub struct GeometricMean;
 
-impl IdentificationStrategy for L2ArithmeticMean {
-    fn identify(&self, grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {
-        identify_no_sign(grid_values, weights, scaling);
-    }
-
+impl CombinationStrategy for ArithmeticMean {
     fn combine_values(&self, values: &[f64]) -> f64 {
         values.iter().sum::<f64>() / values.len() as f64
     }
 }
 
-impl IdentificationStrategy for L2Median {
-    fn identify(&self, grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {
-        identify_no_sign(grid_values, weights, scaling);
-    }
-
+impl CombinationStrategy for Median {
     fn combine_values(&self, values: &[f64]) -> f64 {
         let len = values.len();
         if len == 0 {
@@ -73,11 +64,7 @@ impl IdentificationStrategy for L2Median {
     }
 }
 
-impl IdentificationStrategy for L2ArithmeticGeometricMean {
-    fn identify(&self, grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {
-        identify_no_sign(grid_values, weights, scaling);
-    }
-
+impl CombinationStrategy for ArithmeticGeometricMean {
     fn combine_values(&self, values: &[f64]) -> f64 {
         // Collect positive and negative values into vectors.
         let positive: Vec<f64> = values.iter().copied().filter(|v| *v >= 0.0).collect();
@@ -111,11 +98,7 @@ impl IdentificationStrategy for L2ArithmeticGeometricMean {
     }
 }
 
-impl IdentificationStrategy for L2GeometricMean {
-    fn identify(&self, grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {
-        identify_no_sign(grid_values, weights, scaling);
-    }
-
+impl CombinationStrategy for GeometricMean {
     fn combine_values(&self, values: &[f64]) -> f64 {
         let sign = values.iter().map(|v| v.signum()).sum::<f64>().signum();
         let abs_values: Vec<f64> = values.iter().map(|v| v.abs()).collect();
@@ -393,7 +376,7 @@ pub fn combine_into_single_tree_grid<I>(
     points: ArrayView2<f64>,
 ) -> FittedTreeGrid
 where
-    I: IdentificationStrategy,
+    I: CombinationStrategy,
 {
     println!(
         "Combining {:?} tree grids into a single tree grid.",

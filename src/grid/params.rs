@@ -11,11 +11,11 @@ pub enum SplitStrategyParams {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum IdentificationStrategyParams {
-    L2ArithMean,
-    L2Median,
-    L2ArithmeticGeometricMean,
-    L2GeometricMean,
+pub enum CombinationStrategyParams {
+    ArithMean,
+    Median,
+    ArithmeticGeometricMean,
+    GeometricMean,
     None,
 }
 
@@ -24,7 +24,7 @@ pub struct TreeGridParams {
     pub n_iter: usize,
     pub split_strategy_params: SplitStrategyParams,
     pub reproject_grid_values: bool,
-    pub identification_strategy_params: IdentificationStrategyParams,
+    pub combination_strategy_params: CombinationStrategyParams,
 }
 
 // Builder for TreeGridParams
@@ -32,7 +32,7 @@ pub struct TreeGridParams {
 pub struct TreeGridParamsBuilder {
     n_iter: usize,
     split_strategy_params: SplitStrategyParams,
-    identification_strategy_params: IdentificationStrategyParams,
+    combination_strategy_params: CombinationStrategyParams,
     reproject_grid_values: bool,
 }
 
@@ -44,7 +44,7 @@ impl TreeGridParamsBuilder {
                 split_try: 10,
                 colsample_bytree: 1.0,
             },
-            identification_strategy_params: IdentificationStrategyParams::L2ArithMean,
+            combination_strategy_params: CombinationStrategyParams::ArithMean,
             reproject_grid_values: true,
         }
     }
@@ -59,17 +59,8 @@ impl TreeGridParamsBuilder {
         self
     }
 
-    pub fn identified(mut self, identified: bool) -> Self {
-        self.identification_strategy_params = if identified {
-            IdentificationStrategyParams::L2ArithMean
-        } else {
-            IdentificationStrategyParams::None
-        };
-        self
-    }
-
-    pub fn identification_strategy(mut self, strategy: IdentificationStrategyParams) -> Self {
-        self.identification_strategy_params = strategy;
+    pub fn combination_strategy(mut self, strategy: CombinationStrategyParams) -> Self {
+        self.combination_strategy_params = strategy;
         self
     }
 
@@ -82,7 +73,7 @@ impl TreeGridParamsBuilder {
         TreeGridParams {
             n_iter: self.n_iter,
             split_strategy_params: self.split_strategy_params,
-            identification_strategy_params: self.identification_strategy_params,
+            combination_strategy_params: self.combination_strategy_params,
             reproject_grid_values: self.reproject_grid_values,
         }
     }

@@ -20,10 +20,11 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
         n_iter: int,
         split_try: int, 
         colsample_bytree: float,
-        identified: bool = True,
+        combination_strategy: str = "arith_mean",
         seed: int = 42
     ) -> tuple["TreeGrid", "FitResult"]:
-        tg, fr = _TreeGrid.fit(x, y, n_iter, split_try, colsample_bytree, identified, seed)
+        combination_strategy = int(COMBINATION_STRATEGY_MAP[combination_strategy])
+        tg, fr = _TreeGrid.fit(x, y, n_iter, split_try, colsample_bytree, combination_strategy, seed)
         return cls(tg), fr
 
 
@@ -55,13 +56,26 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
         for axis_idx, (intervals, values) in enumerate(zip(self.intervals, self.grid_values)):
             if individual_plots:
                 plt.figure(figsize=(10, 6))  # Create new figure per axis
+            
             color = colors[axis_idx % len(colors)]
+            
+            # Create connected step function instead of separate horizontal lines
+            x_points = []
+            y_points = []
+            
+            # Use intervals directly without sorting
             for (x_start, x_end), y in zip(intervals, values):
-                # Replace -infinity and +infinity if necessary:
-                if x_start == -np.inf or x_end == np.inf:
+                # Skip infinite intervals for plotting
+                if x_start == float('-inf') or x_end == float('inf'):
                     continue
-                plt.hlines(y, x_start, x_end, lw=2, color=color,
-                           label=f"Axis {axis_idx}" if x_start == float('-inf') else None)
+                    
+                # Add points for step function
+                x_points.extend([x_start, x_end])
+                y_points.extend([y, y])
+            
+            if x_points:  # Only plot if we have valid points
+                plt.step(x_points, y_points, where='post', lw=1, color=color, 
+                         label=f"Axis {axis_idx}")
 
             if individual_plots:
                 plt.xlabel('X-axis')
@@ -81,12 +95,12 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
             plt.show()
 
 
-IDENTIFICATION_STRATEGY_MAP = {
+COMBINATION_STRATEGY_MAP = {
     "none": 0,
-    "l2_arith_mean": 1,
-    "l2_median": 2,
-    "l2_arith_geom_mean": 3,
-    "l2_geom_mean": 4,
+    "arith_mean": 1,
+    "median": 2,
+    "arith_geom_mean": 3,
+    "geom_mean": 4,
 }
 
 SPLIT_STRATEGY_MAP = {
@@ -112,20 +126,19 @@ class MPF:
             split_try: int, 
             colsample_bytree: float,
             split_strategy: str = "random",
-            identification: str = "l2_arith_mean",
+            combination_strategy: str = "arith_mean",
             reproject_grid_values: bool = True,
-            identified: bool = False,
             seed: int = 42
         ) -> tuple["MPF.Boosted", "FitResult"]:
             split_strategy = SPLIT_STRATEGY_MAP[split_strategy]
-            identification_strategy = int(IDENTIFICATION_STRATEGY_MAP[identification] or identified) # short circuit trick
+            combination_strategy = int(COMBINATION_STRATEGY_MAP[combination_strategy])
             
             mpf_boosted, fr = _MPFBoosted.fit(
                 x, y, 
                 epochs, n_trees, n_iter, split_try, 
                 colsample_bytree, 
                 split_strategy,
-                identification_strategy, 
+                combination_strategy, 
                 reproject_grid_values,
                 seed
             )

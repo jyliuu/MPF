@@ -1,5 +1,5 @@
 use crate::grid::params::{
-    IdentificationStrategyParams, SplitStrategyParams, TreeGridParams, TreeGridParamsBuilder,
+    CombinationStrategyParams, SplitStrategyParams, TreeGridParams, TreeGridParamsBuilder,
 };
 
 #[derive(Debug, Clone)]
@@ -47,21 +47,10 @@ impl TreeGridFamilyBoostedParamsBuilder {
         self
     }
 
-    pub fn identified(self, identified: bool) -> Self {
-        self.identification_strategy(if identified {
-            IdentificationStrategyParams::L2ArithMean
-        } else {
-            IdentificationStrategyParams::None
-        })
-    }
-
-    pub fn identification_strategy(
-        mut self,
-        identification_strategy: IdentificationStrategyParams,
-    ) -> Self {
+    pub fn combination_strategy(mut self, combination_strategy: CombinationStrategyParams) -> Self {
         self.tg_params_builder = self
             .tg_params_builder
-            .identification_strategy(identification_strategy);
+            .combination_strategy(combination_strategy);
         self
     }
 

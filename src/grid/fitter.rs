@@ -10,7 +10,7 @@ use crate::grid::FittedTreeGrid;
 
 use super::candidates::RefineCandidate;
 use super::gridindex::GridIndex;
-use super::params::IdentificationStrategyParams;
+use super::params::CombinationStrategyParams;
 use super::strategies::{identify_no_sign, reproject_grid_values, IntervalRandomSplit};
 
 pub fn fit<R: Rng + ?Sized>(
@@ -39,8 +39,8 @@ pub fn fit<R: Rng + ?Sized>(
     };
 
     let identified = !matches!(
-        hyperparameters.identification_strategy_params,
-        IdentificationStrategyParams::None
+        hyperparameters.combination_strategy_params,
+        CombinationStrategyParams::None
     );
 
     fitter.fit(

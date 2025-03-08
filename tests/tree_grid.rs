@@ -6,7 +6,7 @@ mod tests {
         grid::{
             fit,
             params::{
-                IdentificationStrategyParams, SplitStrategyParams, TreeGridParams,
+                CombinationStrategyParams, SplitStrategyParams, TreeGridParams,
                 TreeGridParamsBuilder,
             },
         },
@@ -65,14 +65,14 @@ mod tests {
         let (x, y) = setup_data_csv();
         let mut rng = StdRng::seed_from_u64(42);
         let mut hyperparameters = TreeGridParams {
-            identification_strategy_params: IdentificationStrategyParams::None,
+            combination_strategy_params: CombinationStrategyParams::None,
             ..Default::default()
         };
         let (_, tg_unidentified) = fit(x.view(), y.view(), &hyperparameters, &mut rng);
         let pred_unidentified = tg_unidentified.predict(x.view());
 
         let mut rng = StdRng::seed_from_u64(42);
-        hyperparameters.identification_strategy_params = IdentificationStrategyParams::L2ArithMean;
+        hyperparameters.combination_strategy_params = CombinationStrategyParams::ArithMean;
         let (_, tg_identified) = fit(x.view(), y.view(), &hyperparameters, &mut rng);
         let pred_identified = tg_identified.predict(x.view());
 
