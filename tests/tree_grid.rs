@@ -6,8 +6,7 @@ mod tests {
         grid::{
             fit,
             params::{
-                CombinationStrategyParams, SplitStrategyParams, TreeGridParams,
-                TreeGridParamsBuilder,
+                IdentificationStrategyParams, SplitStrategyParams, TreeGridParams, TreeGridParamsBuilder
             },
         },
         FittedModel,
@@ -65,18 +64,27 @@ mod tests {
         let (x, y) = setup_data_csv();
         let mut rng = StdRng::seed_from_u64(42);
         let mut hyperparameters = TreeGridParams {
-            combination_strategy_params: CombinationStrategyParams::None,
+            identification_strategy_params: IdentificationStrategyParams::None,
             ..Default::default()
         };
         let (_, tg_unidentified) = fit(x.view(), y.view(), &hyperparameters, &mut rng);
         let pred_unidentified = tg_unidentified.predict(x.view());
 
         let mut rng = StdRng::seed_from_u64(42);
-        hyperparameters.combination_strategy_params = CombinationStrategyParams::ArithMean;
+        hyperparameters.identification_strategy_params = IdentificationStrategyParams::L2;
         let (_, tg_identified) = fit(x.view(), y.view(), &hyperparameters, &mut rng);
         let pred_identified = tg_identified.predict(x.view());
 
-        let diff = pred_identified - pred_unidentified;
+        let diff = pred_identified - &pred_unidentified;
+        assert!(diff.iter().all(|&x| x.abs() < 1e-6));
+
+
+        let mut rng = StdRng::seed_from_u64(42);
+        hyperparameters.identification_strategy_params = IdentificationStrategyParams::L1;
+        let (_, tg_identified) = fit(x.view(), y.view(), &hyperparameters, &mut rng);
+        let pred_identified = tg_identified.predict(x.view());
+
+        let diff = pred_identified - &pred_unidentified;
         assert!(diff.iter().all(|&x| x.abs() < 1e-6));
     }
 }

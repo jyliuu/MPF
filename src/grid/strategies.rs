@@ -54,8 +54,6 @@ impl IdentificationStrategy for L1Identification {
     }
 }
 
-pub fn identify_no_sign(grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scaling: &mut f64) {}
-
 pub trait CombinationStrategy: Send + Sync + 'static {
     fn combine_values(values: &[f64]) -> f64;
 }
@@ -284,7 +282,7 @@ pub fn reproject_grid_values(
                 .collect()
         })
         .collect::<Vec<Vec<Vec<usize>>>>();
-    for i in 0..MAX_PROJECTION_ITER {
+    for _ in 0..MAX_PROJECTION_ITER {
         for (dim, curr_grid_values) in grid_values.iter_mut().enumerate() {
             for (idx, x) in curr_grid_values.iter_mut().enumerate() {
                 let mut numerator = 0.0;

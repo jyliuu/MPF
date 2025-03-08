@@ -42,7 +42,7 @@ class TreeGrid(PythonWrapperClassBase, RustClass=_TreeGrid):
         seed: int = 42
     ) -> tuple["TreeGrid", "FitResult"]:
         identification_strategy = int(IDENTIFICATION_STRATEGY_MAP[identification_strategy])
-        tg, fr = _TreeGrid.fit(x, y, n_iter, split_try, colsample_bytree, identification_strategy, combination_strategy, seed)
+        tg, fr = _TreeGrid.fit(x, y, n_iter, split_try, colsample_bytree, identification_strategy, seed)
         return cls(tg), fr
 
 

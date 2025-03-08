@@ -149,7 +149,7 @@ mod tests {
             })
             .build();
 
-        let (fit_result, model) = fit_boosted(x.view(), y.view(), &params);
+        let (fit_result, _) = fit_boosted(x.view(), y.view(), &params);
         println!("Error: {:?}", fit_result.err);
         assert!(fit_result.err < 0.7);
     }

@@ -5,13 +5,7 @@ mod tests {
     use super::test_data::setup_data_csv;
     use mpf::{
         family::{fit, params::TreeGridFamilyBoostedParams},
-        grid::{
-            params::TreeGridParams,
-            strategies::{
-                combine_into_single_tree_grid, ArithmeticGeometricMean, ArithmeticMean,
-                GeometricMean, Median,
-            },
-        },
+        grid::params::{CombinationStrategyParams, TreeGridParams},
         FittedModel,
     };
     use rand::{rngs::StdRng, SeedableRng};
@@ -41,14 +35,11 @@ mod tests {
                 n_trees: 20,
                 bootstrap: false,
                 tg_params: TreeGridParams::default(),
+                combination_strategy: CombinationStrategyParams::Median,
             },
             &mut rng,
         );
-        let tree_grids = tgf.get_tree_grids();
-        let reference = &tree_grids[0];
-        let combined_tree_grid =
-            combine_into_single_tree_grid(tree_grids, reference, &Median, x.view());
-        let pred = combined_tree_grid.predict(x.view());
+        let pred = tgf.predict(x.view());
         let err = (y - pred).powi(2).mean().unwrap();
         println!("err: {:?}", err);
         assert!(err < 0.1);
@@ -65,18 +56,11 @@ mod tests {
                 n_trees: 20,
                 bootstrap: false,
                 tg_params: TreeGridParams::default(),
+                combination_strategy: CombinationStrategyParams::ArithmeticGeometricMean,
             },
             &mut rng,
         );
-        let tree_grids = tgf.get_tree_grids();
-        let reference = &tree_grids[0];
-        let combined_tree_grid = combine_into_single_tree_grid(
-            tree_grids,
-            reference,
-            &ArithmeticGeometricMean,
-            x.view(),
-        );
-        let pred = combined_tree_grid.predict(x.view());
+        let pred = tgf.predict(x.view());
         let err = (y - pred).powi(2).mean().unwrap();
         println!("err: {:?}", err);
         assert!(err < 0.1);
@@ -93,14 +77,11 @@ mod tests {
                 n_trees: 20,
                 bootstrap: false,
                 tg_params: TreeGridParams::default(),
+                combination_strategy: CombinationStrategyParams::ArithMean,
             },
             &mut rng,
         );
-        let tree_grids = tgf.get_tree_grids();
-        let reference = &tree_grids[0];
-        let combined_tree_grid =
-            combine_into_single_tree_grid(tree_grids, reference, &ArithmeticMean, x.view());
-        let pred = combined_tree_grid.predict(x.view());
+        let pred = tgf.predict(x.view());
         let err = (y - pred).powi(2).mean().unwrap();
         println!("err: {:?}", err);
         assert!(err < 0.1);
@@ -117,14 +98,11 @@ mod tests {
                 n_trees: 20,
                 bootstrap: false,
                 tg_params: TreeGridParams::default(),
+                combination_strategy: CombinationStrategyParams::GeometricMean,
             },
             &mut rng,
         );
-        let tree_grids = tgf.get_tree_grids();
-        let reference = &tree_grids[0];
-        let combined_tree_grid =
-            combine_into_single_tree_grid(tree_grids, reference, &GeometricMean, x.view());
-        let pred = combined_tree_grid.predict(x.view());
+        let pred = tgf.predict(x.view());
         let err = (y - pred).powi(2).mean().unwrap();
         println!("err: {:?}", err);
         assert!(err < 0.1);

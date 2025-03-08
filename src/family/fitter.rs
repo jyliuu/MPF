@@ -76,7 +76,7 @@ pub fn fit<R: Rng + ?Sized>(
     let (ref_idx, reference) = tree_grids
         .iter()
         .enumerate()
-        .min_by(|(i, tg), (j, tg2)| {
+        .min_by(|(i, _), (j, _)| {
             fit_results[*i]
                 .err
                 .partial_cmp(&fit_results[*j].err)

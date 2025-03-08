@@ -150,7 +150,7 @@ impl<'a> TreeGridFitter<'a> {
         R: Rng + ?Sized,
     {
         // Main fitting loop
-        for iter in 0..n_iter {
+        for _ in 0..n_iter {
             let intervals = &self.grid_index.intervals;
 
             let splits = split_strategy.sample_splits(rng, self.x.view(), intervals);
@@ -223,7 +223,6 @@ pub fn find_refine_candidate(
     y_hat: ArrayView1<'_, f64>,
     x: ArrayView2<'_, f64>,
 ) -> Result<(f64, f64, RefineCandidate), String> {
-    let col_axis_index = &grid_index.boundaries[col];
     let index = grid_index.compute_col_index_for_point(col, split);
     let cells = grid_index.collect_fixed_axis_cells(col, index);
 
@@ -233,7 +232,6 @@ pub fn find_refine_candidate(
     let mut m_a = 0.0;
     let mut m_b = 0.0;
     let mut err_old = 0.0;
-    let err_new = 0.0;
     let mut a_points_idx = Vec::new();
     let mut b_points_idx = Vec::new();
 
