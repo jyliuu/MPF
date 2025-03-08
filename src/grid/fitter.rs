@@ -228,7 +228,6 @@ pub fn find_refine_candidate(
 ) -> Result<(f64, f64, RefineCandidate), String> {
     let index = grid_index.compute_col_index_for_point(col, split);
     let cells = grid_index.collect_fixed_axis_cells(col, index);
-
     // Initialize accumulators and index vectors
     let mut n_a = 0.0;
     let mut n_b = 0.0;
@@ -247,7 +246,8 @@ pub fn find_refine_candidate(
             .map(|(i, &idx)| grid_values[i][idx])
             .product::<f64>();
         let v_pow2 = v.powi(2);
-        let curr_leaf_points_idx = &grid_index.cells[cell_idx];
+        // let curr_leaf_points_idx = &grid_index.cells[cell_idx];
+        let curr_leaf_points_idx = grid_index.cells.get(&cell_idx).unwrap();
 
         for &i in curr_leaf_points_idx {
             let x_val = x[[i, col]];
@@ -511,5 +511,6 @@ mod tests {
             assert_float_eq!(refine_candidate.update_b, 2.828492111820738, 1e-10);
             tree_grid.update_tree(refine_candidate);
         }
+        println!("tree_grid.grid_index {:?}", tree_grid.grid_index);
     }
 }

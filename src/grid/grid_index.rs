@@ -1,10 +1,12 @@
 use ndarray::{ArrayView1, ArrayView2};
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::ops::Range;
 
 /// GridIndex represents a p-dimensional grid over a set of n points.
 /// Each axis is partitioned by (possibly empty) sorted boundaries. Initially,
 /// no boundaries exist so each axis spans (-∞, ∞) and the grid has one cell containing all points.
+/// This implementation uses a HashMap for cell storage to efficiently handle sparse data.
 
 #[derive(Debug, Clone)]
 pub struct GridIndex {
@@ -13,9 +15,10 @@ pub struct GridIndex {
     pub boundaries: Vec<Vec<f64>>,
     pub intervals: Vec<Vec<(f64, f64)>>,
     pub observation_counts: Vec<Vec<usize>>,
-    /// Flattened grid cells. Each cell holds a vector of point indices.
+    /// Sparse grid cells. Each cell holds a vector of point indices.
     /// The flat index is computed using precomputed strides.
-    pub cells: Vec<Vec<usize>>,
+    /// Only cells that contain points are stored in the HashMap.
+    pub cells: HashMap<usize, Vec<usize>>,
     /// Strides for flattening multi-dimensional cell indices.
     pub strides: Vec<usize>,
 }
@@ -31,8 +34,9 @@ impl GridIndex {
         // Each axis has one interval (no boundaries => one interval).
         let dims: Vec<usize> = vec![1; p];
         let strides = Self::compute_strides(&dims);
-        // Only one cell, containing all point indices.
-        let cells = vec![(0..n).collect()];
+        // Only one cell (at index 0), containing all point indices.
+        let mut cells = HashMap::with_capacity(1);
+        cells.insert(0, (0..n).collect());
         let intervals = vec![vec![(f64::NEG_INFINITY, f64::INFINITY)]; p];
         let observation_counts = vec![vec![n]; p];
         GridIndex {
@@ -71,7 +75,7 @@ impl GridIndex {
             boundaries,
             intervals,
             observation_counts: vec![],
-            cells: vec![],
+            cells: HashMap::new(),
             strides: Self::compute_strides(&dims),
         };
         grid_index.reassign_cells(points);
@@ -128,20 +132,30 @@ impl GridIndex {
     fn reassign_cells(&mut self, points: ArrayView2<'_, f64>) {
         let dims = self.current_dims();
         let total_cells: usize = dims.iter().product();
-        // Create a new vector of empty cells.
-        let mut new_cells = vec![Vec::new(); total_cells];
+
+        // Instead of creating a vector for every possible cell, use a HashMap
+        // that only allocates for cells that have points in them
+        let estimated_nonempty = points.nrows().min(total_cells.saturating_div(4));
+        let mut new_cells = HashMap::with_capacity(estimated_nonempty);
+
         let mut new_observation_counts: Vec<Vec<usize>> =
             dims.iter().map(|d| vec![0; *d]).collect();
+
         for i in 0..points.nrows() {
             let point = points.row(i);
             let (cell_index, cartesian_index) = self.compute_cell_index_for_point(point);
-            new_cells[cell_index].push(i);
+
+            // Get or create the vector for this cell
+            new_cells.entry(cell_index).or_insert_with(Vec::new).push(i);
+
             for (j, &idx) in cartesian_index.iter().enumerate() {
                 new_observation_counts[j][idx] += 1;
             }
         }
+
         self.cells = new_cells;
         self.observation_counts = new_observation_counts;
+
     }
 
     /// Splits the grid globally along the given axis by inserting `split` as a new boundary.
@@ -166,7 +180,7 @@ impl GridIndex {
     /// the second interval on axis 1.
     ///
     /// Returns an Option containing a slice of point indices, or None if the length of
-    /// `cell_indices` does not match the number of axes.
+    /// `cell_indices` does not match the number of axes or if the cell is empty.
     pub fn query(&self, cell_indices: &[usize]) -> Option<&[usize]> {
         if cell_indices.len() != self.boundaries.len() {
             return None;
@@ -177,8 +191,11 @@ impl GridIndex {
             .zip(self.strides.iter())
             .map(|(&ci, &stride)| ci * stride)
             .sum();
-        self.cells.get(flat_index).map(|v| &v[..])
+
+        // Look up the cell in the HashMap
+        self.cells.get(&flat_index).map(|v| &v[..])
     }
+
     pub fn collect_fixed_axis_cells(&self, fixed_axis: usize, fixed_index: usize) -> Vec<usize> {
         let p = self.boundaries.len();
         let dims = self.current_dims();
@@ -197,7 +214,6 @@ impl GridIndex {
             result: &mut Vec<usize>,
         ) {
             if current_dim == dims.len() {
-                // At a full multi-dimensional index; record the flat index.
                 result.push(current_flat);
                 return;
             }
@@ -243,6 +259,7 @@ impl GridIndex {
             &mut Vec::with_capacity(p),
             &mut result,
         );
+        result.retain(|cell| self.cells.contains_key(cell));
         result
     }
 
@@ -274,11 +291,12 @@ impl GridIndex {
             strides: &[usize],
             current_index: usize,
             dims: &[usize],
-            cells: &[Vec<usize>],
+            cells: &HashMap<usize, Vec<usize>>,
             result: &mut Vec<usize>,
         ) {
             if axis == p {
-                if let Some(cell) = cells.get(current_index) {
+                // Only try to access cells that exist in the HashMap
+                if let Some(cell) = cells.get(&current_index) {
                     result.extend(cell);
                 }
                 return;
@@ -326,7 +344,7 @@ mod tests {
         let grid = GridIndex::new(points.view());
         // Initially, there is only one cell containing all points.
         assert_eq!(grid.cells.len(), 1);
-        assert_eq!(grid.cells[0].len(), 5);
+        assert_eq!(grid.cells.get(&0).unwrap().len(), 5);
     }
 
     #[test]
@@ -361,8 +379,8 @@ mod tests {
         grid.split_axis(1, 0.0, points.view());
         let dims = grid.current_dims();
         assert_eq!(dims, vec![2, 2]);
-        // Now there are 2*2 = 4 cells.
-        assert_eq!(grid.cells.len(), 4);
+        // Now there are 2*2 = 4 cells, but we might not have points in all of them
+        assert!(grid.cells.len() <= 4 && !grid.cells.is_empty());
 
         // Query the cell with x < 0 and y < 0, i.e. cell indices [0, 0].
         let cell_neg_neg = grid.query(&[0, 0]).unwrap();

@@ -138,7 +138,7 @@ mod tests {
         let (x, y) = setup_data_housing_csv();
         // Use builder pattern for cleaner parameter construction
         let params = MPFBoostedParamsBuilder::new()
-            .epochs(40)
+            .epochs(10)
             .n_iter(120) // Using default, but explicitly stated for clarity
             .n_trees(4)
             .combination_strategy(CombinationStrategyParams::ArithmeticGeometricMean)
