@@ -5,16 +5,14 @@ use crate::FitResult;
 
 use crate::grid::candidates::update_predictions;
 use crate::grid::params::{SplitStrategyParams, TreeGridParams};
-use crate::grid::strategies::{compute_initial_values, RandomSplit, SplitStrategy};
+use crate::grid::splitting::{IntervalRandomSplit, RandomSplit, SplitStrategy};
 use crate::grid::FittedTreeGrid;
 
 use super::candidates::RefineCandidate;
-use super::gridindex::GridIndex;
+use super::grid_index::GridIndex;
+use super::identification::{IdentificationStrategy, L1Identification, L2Identification};
 use super::params::IdentificationStrategyParams;
-use super::strategies::{
-    reproject_grid_values, IdentificationStrategy, IntervalRandomSplit,
-    L1Identification, L2Identification,
-};
+use super::reproject_values::reproject_grid_values;
 
 pub fn fit<R: Rng + ?Sized>(
     x: ArrayView2<f64>,
@@ -123,7 +121,12 @@ impl TreeGridFitter<'_> {
 
 impl<'a> TreeGridFitter<'a> {
     pub fn new(x: ArrayView2<'a, f64>, y: ArrayView1<'a, f64>) -> Self {
-        let (_, grid_values, y_hat) = compute_initial_values(x, y);
+        let mean = y.mean().unwrap();
+        let init_value: f64 = mean.abs().powf(1.0 / x.ncols() as f64);
+        let sign = mean.signum();
+        let mut grid_values = vec![vec![init_value]; x.ncols() - 1];
+        grid_values.insert(0, vec![sign * init_value]);
+        let y_hat = Array1::from_vec(vec![mean; x.nrows()]);
         let residuals = y.to_owned() - &y_hat;
 
         let grid_index = GridIndex::new(x.view());

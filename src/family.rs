@@ -1,5 +1,6 @@
 use super::grid::FittedTreeGrid;
 mod fitter;
+pub mod combine_grids;
 pub mod params;
 pub use fitter::fit;
 
