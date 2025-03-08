@@ -10,6 +10,10 @@ pub fn fit_boosted(
     y: ArrayView1<f64>,
     hyperparameters: &MPFBoostedParams,
 ) -> (FitResult, MPF<TreeGridFamily<BoostedVariant>>) {
+    println!(
+        "Fitting boosted model with hyperparameters: {:?}",
+        hyperparameters
+    );
     let mut rng = StdRng::seed_from_u64(hyperparameters.seed);
     let MPFBoostedParams {
         epochs,

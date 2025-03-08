@@ -2,7 +2,7 @@ use crate::grid::params::{
     IdentificationStrategyParams, SplitStrategyParams, TreeGridParams, TreeGridParamsBuilder,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TreeGridFamilyBoostedParams {
     pub n_trees: usize,
     pub bootstrap: bool,

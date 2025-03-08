@@ -3,6 +3,7 @@ use crate::{
     grid::params::{IdentificationStrategyParams, SplitStrategyParams},
 };
 
+#[derive(Debug, Clone)]
 pub struct MPFBoostedParams {
     pub epochs: usize,
     pub tgf_params: TreeGridFamilyBoostedParams,
