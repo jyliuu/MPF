@@ -234,13 +234,11 @@ pub fn compute_initial_values(
 
 const MAX_PROJECTION_ITER: usize = 10000;
 pub fn reproject_grid_values(
-    x: ArrayView2<f64>,
     labels: ArrayView1<f64>,
     mut y_hat: ArrayViewMut1<f64>,
     mut residuals: ArrayViewMut1<f64>,
     grid_index: &GridIndex,
     grid_values: &mut [Vec<f64>],
-    scaling: &mut f64,
 ) -> f64 {
     let mut err = residuals.pow2().mean().unwrap();
     let grid_cells_along_dim = (0..grid_values.len())
@@ -297,13 +295,6 @@ pub fn identify_no_sign(grid_values: &mut [Vec<f64>], weights: &[Vec<f64>], scal
         let curr_grid_values = &mut grid_values[dim];
 
         let weights_sum: f64 = curr_weights.iter().sum();
-
-        let weighted_mean = curr_grid_values
-            .iter()
-            .zip(curr_weights.iter())
-            .map(|(&x, &w)| x * w)
-            .sum::<f64>()
-            / weights_sum;
 
         let l2_weighted_norm = curr_grid_values
             .iter()
@@ -368,7 +359,7 @@ pub fn compute_inner_product(first: &FittedTreeGrid, second: &FittedTreeGrid, di
         // Multiply values for this overlap (no weighting by interval length here)
         inner_product += self_val * other_val;
     }
-
+    println!("Inner product: {}", inner_product);
     inner_product
 }
 
@@ -397,14 +388,17 @@ pub fn get_aligned_signs_for_all_tree_grids(tree_grids: &[FittedTreeGrid]) -> Ve
 
 pub fn combine_into_single_tree_grid<I>(
     grids: &[FittedTreeGrid],
+    reference: &FittedTreeGrid,
     combine_method: &I,
     points: ArrayView2<f64>,
 ) -> FittedTreeGrid
 where
     I: IdentificationStrategy,
 {
-    println!("Combining tree grids into a single tree grid.");
-    let reference = &grids[0];
+    println!(
+        "Combining {:?} tree grids into a single tree grid.",
+        grids.len()
+    );
 
     let aligned_signs = get_aligned_signs_for_all_tree_grids(grids);
     let num_axes = reference.grid_index.intervals.len();
@@ -413,15 +407,15 @@ where
     let mut combined_intervals: Vec<Vec<(f64, f64)>> = Vec::with_capacity(num_axes);
     let mut combined_grid_values: Vec<Vec<f64>> = Vec::with_capacity(num_axes);
 
-    let scalings: Vec<f64> = grids
-        .iter()
-        .zip(&aligned_signs)
-        .map(|(grid, signs)| {
-            let total_sign = signs.iter().product::<f64>();
-            grid.scaling * total_sign
-        })
-        .collect();
-    let combined_scaling = combine_method.combine_values(&scalings);
+    // let scalings: Vec<f64> = grids
+    //     .iter()
+    //     .zip(&aligned_signs)
+    //     .map(|(grid, signs)| {
+    //         let total_sign = signs.iter().product::<f64>();
+    //         grid.scaling * total_sign
+    //     })
+    //     .collect();
+    // let combined_scaling = combine_method.combine_values(&scalings);
 
     // Process each axis separately.
     for axis in 0..num_axes {
@@ -481,7 +475,7 @@ where
 
     FittedTreeGrid::new(
         combined_grid_values,
-        combined_scaling,
+        1.0,
         GridIndex::from_boundaries_and_points(combined_splits, points),
     )
 }

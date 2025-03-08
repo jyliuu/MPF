@@ -35,7 +35,7 @@ pub fn fit<R: Rng + ?Sized>(
     let seeds: Vec<u64> = (0..*n_trees).map(|_| rng.gen()).collect();
 
     #[cfg(not(feature = "use-rayon"))]
-    let tree_grids: Vec<FittedTreeGrid> = seeds
+    let (fit_results, tree_grids): (Vec<FitResult>, Vec<FittedTreeGrid>) = seeds
         .iter()
         .map(|&seed| {
             let mut thread_rng = rand::rngs::StdRng::seed_from_u64(seed);
@@ -49,12 +49,12 @@ pub fn fit<R: Rng + ?Sized>(
             } else {
                 grid::fit(x.view(), y.view(), tg_params, &mut thread_rng)
             };
-            tg
+            (fit_res, tg)
         })
         .collect();
 
     #[cfg(feature = "use-rayon")]
-    let tree_grids: Vec<FittedTreeGrid> = seeds
+    let (fit_results, tree_grids): (Vec<FitResult>, Vec<FittedTreeGrid>) = seeds
         .into_par_iter()
         .map(|seed| {
             let mut thread_rng = rand::rngs::StdRng::seed_from_u64(seed);
@@ -68,33 +68,61 @@ pub fn fit<R: Rng + ?Sized>(
             } else {
                 grid::fit(x.view(), y.view(), tg_params, &mut thread_rng)
             };
-            tg
+            (fit_res, tg)
         })
         .collect();
+
+    let (ref_idx, reference) = tree_grids
+        .iter()
+        .enumerate()
+        .min_by(|(i, tg), (j, tg2)| {
+            fit_results[*i]
+                .err
+                .partial_cmp(&fit_results[*j].err)
+                .unwrap()
+        })
+        .unwrap();
+
+    println!("reference: {:?}", fit_results[ref_idx].err);
 
     let combined_tree_grid = match tg_params.identification_strategy_params {
         IdentificationStrategyParams::L2ArithMean => Some(combine_into_single_tree_grid(
             &tree_grids,
+            reference,
             &L2ArithmeticMean,
             x.view(),
         )),
         IdentificationStrategyParams::L2Median => Some(combine_into_single_tree_grid(
             &tree_grids,
+            reference,
             &L2Median,
             x.view(),
         )),
-        IdentificationStrategyParams::L2ArithmeticGeometricMean => Some(
-            combine_into_single_tree_grid(&tree_grids, &L2ArithmeticGeometricMean, x.view()),
-        ),
+        IdentificationStrategyParams::L2ArithmeticGeometricMean => {
+            Some(combine_into_single_tree_grid(
+                &tree_grids,
+                reference,
+                &L2ArithmeticGeometricMean,
+                x.view(),
+            ))
+        }
         IdentificationStrategyParams::L2GeometricMean => Some(combine_into_single_tree_grid(
             &tree_grids,
+            reference,
             &L2GeometricMean,
             x.view(),
         )),
         _ => None,
     };
-    let tgf = TreeGridFamily(tree_grids, BoostedVariant { combined_tree_grid });
-    let preds = tgf.predict(x);
+    let mut tgf = TreeGridFamily(tree_grids, BoostedVariant { combined_tree_grid });
+    let mut preds = tgf.predict(x);
+
+    if let Some(combined_tree_grid) = &mut tgf.1.combined_tree_grid {
+        let scaling = optimal_scaling(y.view(), preds.view());
+        combined_tree_grid.scaling = scaling;
+        preds *= scaling;
+        println!("Optimal combined scaling: {:?}", scaling);
+    }
     let residuals = &y - &preds;
     let err = residuals.pow2().mean().unwrap();
 
@@ -106,4 +134,10 @@ pub fn fit<R: Rng + ?Sized>(
         },
         tgf,
     )
+}
+
+pub fn optimal_scaling(y: ArrayView1<f64>, preds: ArrayView1<f64>) -> f64 {
+    let preds_ssq = preds.pow2().sum();
+    let y_preds_product = y.dot(&preds);
+    y_preds_product / preds_ssq
 }
