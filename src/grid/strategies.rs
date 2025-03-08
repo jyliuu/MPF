@@ -1,3 +1,5 @@
+use std::ptr;
+
 use ndarray::{Array1, ArrayView1, ArrayView2, ArrayViewMut1};
 use rand::{seq::index::sample, Rng};
 
@@ -385,16 +387,20 @@ pub fn align_treegrid_to_reference_signs(
         .collect()
 }
 
-pub fn get_aligned_signs_for_all_tree_grids(tree_grids: &[FittedTreeGrid]) -> Vec<Vec<f64>> {
-    let reference = &tree_grids[0];
-    let aligned_signs: Vec<Vec<f64>> = std::iter::once(vec![1.0; reference.grid_values.len()])
-        .chain(
-            tree_grids
-                .iter()
-                .skip(1)
-                .map(|grid| align_treegrid_to_reference_signs(grid, reference)),
-        )
-        .collect();
+pub fn get_aligned_signs_for_all_tree_grids(
+    tree_grids: &[FittedTreeGrid],
+    reference: &FittedTreeGrid,
+) -> Vec<Vec<f64>> {
+    let aligned_signs: Vec<Vec<f64>> = tree_grids
+        .iter()
+        .map(|grid| {
+            if ptr::eq(grid, reference) {
+                vec![1.0; grid.grid_values.len()]
+            } else {
+                align_treegrid_to_reference_signs(grid, reference)
+            }
+        })
+    .collect();
 
     aligned_signs
 }
@@ -412,7 +418,7 @@ where
         grids.len()
     );
 
-    let aligned_signs = get_aligned_signs_for_all_tree_grids(grids);
+    let aligned_signs = get_aligned_signs_for_all_tree_grids(grids, reference);
     let num_axes = reference.grid_index.intervals.len();
 
     let mut combined_splits: Vec<Vec<f64>> = Vec::with_capacity(num_axes);
