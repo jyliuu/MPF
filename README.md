@@ -133,48 +133,52 @@ fn main() {
 ## Project Structure
 
 ```
-rpf-rust/
+MPF/
 ├── benches/             # Benchmarking code
 │   └── tree_grid_fitter.rs
+├── clippy.toml
 ├── data/                # Sample datasets
 │   ├── dat.csv
 │   └── housing.csv
 ├── mpf-py/              # Python interface
+│   ├── Cargo.lock
+│   ├── Cargo.toml
 │   ├── notebooks/       # Example notebooks and scripts
+│   ├── pyproject.toml   # Python package configuration
 │   ├── python/          # Python package code
-│   │   ├── mpf_py/
 │   │   ├── example.py
-│   │   └── main.py
+│   │   ├── main.py
+│   │   └── mpf_py/
 │   ├── src/             # Rust-Python bindings
 │   │   └── lib.rs
-│   ├── tests/           # Python interface tests
-│   │   ├── test_models.py
-│   │   └── test_reproducibility.py
-│   └── pyproject.toml   # Python package configuration
+│   └── tests/           # Python interface tests
+│       ├── test_models.py
+│       └── test_reproducibility.py
 ├── src/                 # Core Rust implementation
 │   ├── family/          # Family implementation
+│   │   ├── combine_grids.rs
 │   │   ├── fitter.rs
 │   │   └── params.rs
+│   ├── family.rs        # Family module exports
 │   ├── forest/          # Forest implementation
 │   │   ├── fitter.rs
 │   │   └── params.rs
-│   ├── grid/            # Grid implementation
-│   │   ├── candidates.rs
-│   │   ├── fitter.rs
-│   │   ├── gridindex.rs
-│   │   ├── params.rs
-│   │   └── strategies.rs
-│   ├── family.rs        # Family module exports
 │   ├── forest.rs        # Forest module exports
+│   ├── grid/            # Grid implementation
+│   │   ├── candidates.rs      # Handles generation of candidate split points for trees
+│   │   ├── fitter.rs          # Implements core algorithm for fitting tree grid models
+│   │   ├── grid_index.rs      # Manages grid data structure and indexing operations
+│   │   ├── identification.rs  # Identifies grid components
+│   │   ├── params.rs          # Defines hyperparameters for grid models
+│   │   ├── reproject_values.rs # Implements value reprojection for model refinement
+│   │   └── splitting.rs       # Implements strategies for optimal grid splitting
 │   ├── grid.rs          # Grid module exports
 │   └── lib.rs           # Main library exports
-├── tests/               # Rust tests
-│   ├── family.rs
-│   ├── forest.rs
-│   ├── test_data.rs
-│   └── tree_grid.rs
-├── Cargo.toml           # Rust package configuration
-└── README.md            # Project documentation
+└── tests/               # Rust tests
+    ├── family.rs
+    ├── forest.rs
+    ├── test_data.rs
+    └── tree_grid.rs
 ```
 
 ## API Documentation
