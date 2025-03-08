@@ -45,7 +45,9 @@ mod tests {
             &mut rng,
         );
         let tree_grids = tgf.get_tree_grids();
-        let combined_tree_grid = combine_into_single_tree_grid(tree_grids, &L2Median, x.view());
+        let reference = &tree_grids[0];
+        let combined_tree_grid =
+            combine_into_single_tree_grid(tree_grids, reference, &L2Median, x.view());
         let pred = combined_tree_grid.predict(x.view());
         let err = (y - pred).powi(2).mean().unwrap();
         println!("err: {:?}", err);
@@ -67,8 +69,13 @@ mod tests {
             &mut rng,
         );
         let tree_grids = tgf.get_tree_grids();
-        let combined_tree_grid =
-            combine_into_single_tree_grid(tree_grids, &L2ArithmeticGeometricMean, x.view());
+        let reference = &tree_grids[0];
+        let combined_tree_grid = combine_into_single_tree_grid(
+            tree_grids,
+            reference,
+            &L2ArithmeticGeometricMean,
+            x.view(),
+        );
         let pred = combined_tree_grid.predict(x.view());
         let err = (y - pred).powi(2).mean().unwrap();
         println!("err: {:?}", err);
@@ -90,8 +97,9 @@ mod tests {
             &mut rng,
         );
         let tree_grids = tgf.get_tree_grids();
+        let reference = &tree_grids[0];
         let combined_tree_grid =
-            combine_into_single_tree_grid(tree_grids, &L2ArithmeticMean, x.view());
+            combine_into_single_tree_grid(tree_grids, reference, &L2ArithmeticMean, x.view());
         let pred = combined_tree_grid.predict(x.view());
         let err = (y - pred).powi(2).mean().unwrap();
         println!("err: {:?}", err);
@@ -113,8 +121,9 @@ mod tests {
             &mut rng,
         );
         let tree_grids = tgf.get_tree_grids();
+        let reference = &tree_grids[0];
         let combined_tree_grid =
-            combine_into_single_tree_grid(tree_grids, &L2GeometricMean, x.view());
+            combine_into_single_tree_grid(tree_grids, reference, &L2GeometricMean, x.view());
         let pred = combined_tree_grid.predict(x.view());
         let err = (y - pred).powi(2).mean().unwrap();
         println!("err: {:?}", err);

@@ -136,13 +136,13 @@ mod tests {
         use crate::test_data::setup_data_housing_csv;
 
         let (x, y) = setup_data_housing_csv();
-
         // Use builder pattern for cleaner parameter construction
         let params = MPFBoostedParamsBuilder::new()
             .epochs(40)
             .n_iter(120) // Using default, but explicitly stated for clarity
             .n_trees(4)
             .identification_strategy(IdentificationStrategyParams::L2ArithmeticGeometricMean)
+            .reproject_grid_values(true)
             .split_strategy(SplitStrategyParams::RandomSplit {
                 split_try: 12,
                 colsample_bytree: 1.0,
