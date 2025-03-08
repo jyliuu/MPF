@@ -373,7 +373,6 @@ pub fn compute_inner_product(first: &FittedTreeGrid, second: &FittedTreeGrid, di
         // Multiply values for this overlap (no weighting by interval length here)
         inner_product += self_val * other_val;
     }
-    println!("Inner product: {}", inner_product);
     inner_product
 }
 

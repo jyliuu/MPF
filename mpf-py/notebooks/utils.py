@@ -46,9 +46,9 @@ def gen_data(n=5000, seed=1, unif = True, noise=True, model=true_model3):
 
 def plot_2d_model_predictions_map(
         model, 
-        x_bounds=(-4,4), y_bounds=(-4,4),
         grid_points=100, cmap='viridis',
-        title="Model Predictions", data=None, cbar_max=5
+        title="Model Predictions", 
+        data=None, cbar_max=5
     ):
     """
     Constructs a grid of (longitude, latitude) coordinates and uses the provided ML model to generate predictions.
@@ -66,8 +66,10 @@ def plot_2d_model_predictions_map(
         cbar_max (float): The maximum value for the colorbar
     """
     # Create linearly spaced values for longitude and latitude
-    lon_min, lon_max = x_bounds
-    lat_min, lat_max = y_bounds
+    X, y = data
+
+    lon_min, lon_max = (X[:, 1].min(), X[:, 1].max())
+    lat_min, lat_max = (X[:, 0].min(), X[:, 0].max())
 
     lon_vals = np.linspace(lon_min, lon_max, grid_points)
     lat_vals = np.linspace(lat_min, lat_max, grid_points)
@@ -76,13 +78,13 @@ def plot_2d_model_predictions_map(
     LON, LAT = np.meshgrid(lon_vals, lat_vals)
 
     # Flatten the grid to form (longitude, latitude) pairs
-    grid = np.column_stack([LON.ravel(), LAT.ravel()])
+    grid = np.column_stack([LAT.ravel(), LON.ravel()])
 
     # Obtain predictions from the ML model
     predictions = np.clip(model(grid), a_min=-3, a_max=cbar_max)
 
     # Reshape predictions back into the grid format
-    Z = predictions.reshape(LON.shape)
+    Z = predictions.reshape(LAT.shape)
 
     # Set up the map projection
     plt.figure(figsize=(12, 8))
@@ -116,7 +118,7 @@ def plot_2d_model_predictions_map(
     # If data is provided, plot the actual points
     if data is not None:
         X, y = data
-        scatter = ax.scatter(X[:, 0], X[:, 1], c=y, cmap=cmap, 
+        ax.scatter(X[:, 1], X[:, 0], c=y, cmap=cmap, 
                            transform=ccrs.PlateCarree(), alpha=1, s=3)
     
     plt.show()
@@ -134,24 +136,24 @@ def plot_2d_model_map_errors(model, data, grid_points=100, cmap='coolwarm',
     squared_errors = errors ** 2
 
     # Create bin edges
-    lon_min, lon_max = (X[:, 0].min(), X[:, 0].max())
-    lat_min, lat_max = (X[:, 1].min(), X[:, 1].max())
+    lon_min, lon_max = (X[:, 1].min(), X[:, 1].max())
+    lat_min, lat_max = (X[:, 0].min(), X[:, 0].max())
     print(lon_min, lon_max, lat_min, lat_max)
     lon_edges = np.linspace(lon_min, lon_max, grid_points + 1)
     lat_edges = np.linspace(lat_min, lat_max, grid_points + 1)
 
     # Calculate 2D histograms
-    H_counts, _, _ = np.histogram2d(X[:, 0], X[:, 1], bins=[lon_edges, lat_edges])  # Swapped order of edges
-    H_errors, _, _ = np.histogram2d(X[:, 0], X[:, 1], bins=[lon_edges, lat_edges], weights=errors)
-    H_errors_squared, _, _ = np.histogram2d(X[:, 0], X[:, 1], bins=[lon_edges, lat_edges], weights=squared_errors)
+    H_counts, _, _ = np.histogram2d(X[:, 0], X[:, 1], bins=[lat_edges, lon_edges])  # Swapped order of edges
+    H_errors, _, _ = np.histogram2d(X[:, 0], X[:, 1], bins=[lat_edges, lon_edges], weights=errors)
+    H_errors_squared, _, _ = np.histogram2d(X[:, 0], X[:, 1], bins=[lat_edges, lon_edges], weights=squared_errors)
         # Compute mean errors and handle empty bins
     with np.errstate(divide='ignore', invalid='ignore'):
         H_mean = H_errors / H_counts
     H_mean[H_counts == 0] = np.nan
 
     # Calculate marginal sums
-    lon_sse = np.nansum(H_errors_squared, axis=1)  # Sum along latitude
-    lat_sse = np.nansum(H_errors_squared, axis=0)  # Sum along longitude
+    lon_sse = np.nansum(H_errors_squared, axis=0)  # Sum along latitude
+    lat_sse = np.nansum(H_errors_squared, axis=1)  # Sum along longitude
 
     # Create plot with marginal histograms
     fig = plt.figure(figsize=(16, 12))
@@ -204,7 +206,7 @@ def plot_2d_model_map_errors(model, data, grid_points=100, cmap='coolwarm',
     plt.show()
 
 
-def plot_2d_model_predictions(model, x_bounds=(-4,4), y_bounds=(-4,4), grid_points=100, cmap='seismic',
+def plot_2d_model_predictions(model, x_bounds=(-4,4), y_bounds=(-4,4), color_bounds=(-6,6), grid_points=100, cmap='seismic',
                            title="Model Predictions"):
     """
     Constructs a grid of (x1, x2) coordinates and uses the provided ML model to generate predictions.
@@ -243,7 +245,7 @@ def plot_2d_model_predictions(model, x_bounds=(-4,4), y_bounds=(-4,4), grid_poin
 
     # Create the plot with pcolormesh, applying the norm so that 0 is centered
     plt.figure(figsize=(8, 6))
-    plt.contourf(X1, X2, Z, levels=20, cmap=cmap)
+    plt.contourf(X1, X2, Z, levels=20, cmap=cmap, vmin=color_bounds[0], vmax=color_bounds[1])
 
     plt.colorbar(label='Prediction')
     plt.xlabel('x1')
