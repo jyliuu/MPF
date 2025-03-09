@@ -1,6 +1,6 @@
 use ndarray::{ArrayView1, ArrayView2};
+use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::ops::Range;
 
 /// GridIndex represents a p-dimensional grid over a set of n points.
@@ -18,7 +18,7 @@ pub struct GridIndex {
     /// Sparse grid cells. Each cell holds a vector of point indices.
     /// The flat index is computed using precomputed strides.
     /// Only cells that contain points are stored in the HashMap.
-    pub cells: HashMap<usize, Vec<usize>>,
+    pub cells: FxHashMap<usize, Vec<usize>>,
     /// Strides for flattening multi-dimensional cell indices.
     pub strides: Vec<usize>,
 }
@@ -35,7 +35,7 @@ impl GridIndex {
         let dims: Vec<usize> = vec![1; p];
         let strides = Self::compute_strides(&dims);
         // Only one cell (at index 0), containing all point indices.
-        let mut cells = HashMap::with_capacity(1);
+        let mut cells = FxHashMap::with_capacity_and_hasher(1, Default::default());
         cells.insert(0, (0..n).collect());
         let intervals = vec![vec![(f64::NEG_INFINITY, f64::INFINITY)]; p];
         let observation_counts = vec![vec![n]; p];
@@ -75,7 +75,7 @@ impl GridIndex {
             boundaries,
             intervals,
             observation_counts: vec![],
-            cells: HashMap::new(),
+            cells: FxHashMap::default(),
             strides: Self::compute_strides(&dims),
         };
         grid_index.assign_cells(points);
@@ -97,6 +97,10 @@ impl GridIndex {
         split: f64,
         points: ArrayView2<'_, f64>,
     ) {
+        println!(
+            "Observation counts before split: {:#?}",
+            self.observation_counts
+        );
         // Insert the new split value into the boundaries for this axis if not already present.
         let pos = self.compute_col_index_for_point(axis, split);
         let (curr_start, curr_end) = self.intervals[axis][pos];
@@ -116,7 +120,8 @@ impl GridIndex {
         self.observation_counts[axis].insert(pos + 1, 0);
 
         let estimated_nonempty = self.cells.len();
-        let mut new_cells = HashMap::with_capacity(estimated_nonempty);
+        let mut new_cells =
+            FxHashMap::with_capacity_and_hasher(estimated_nonempty, Default::default());
 
         // Create set of affected cells for faster lookup
         let affected_set: std::collections::HashSet<usize> =
@@ -126,31 +131,18 @@ impl GridIndex {
         let mut to_move = Vec::new();
         for &old_flat_idx in self.cells.keys() {
             if !affected_set.contains(&old_flat_idx) {
-                // First convert old flat index to old cartesian coordinates
-                let mut cartesian = Vec::new();
+                let mut new_flat_idx = 0;
                 let mut remainder = old_flat_idx;
-
-                // Use old strides to get accurate original coordinates
                 for (i, &stride) in old_strides.iter().enumerate() {
                     let coord = remainder / stride;
-                    cartesian.push(coord);
                     remainder %= stride;
+                    let new_coord = if i == axis && coord > pos {
+                        coord + 1
+                    } else {
+                        coord
+                    };
+                    new_flat_idx += new_coord * self.strides[i];
                 }
-
-                // Now adjust coordinate based on split axis and position
-                // If the coordinate on the split axis is > split_pos,
-                // we need to increment it to account for the newly inserted split
-                if cartesian[axis] > pos {
-                    cartesian[axis] += 1;
-                }
-
-                // Calculate new flat index using adjusted cartesian coords and new strides
-                let new_flat_idx = cartesian
-                    .iter()
-                    .zip(self.strides.iter())
-                    .map(|(&coord, &stride)| coord * stride)
-                    .sum();
-
                 to_move.push((old_flat_idx, new_flat_idx));
             }
         }
@@ -186,6 +178,7 @@ impl GridIndex {
         }
         self.cells = new_cells;
     }
+
     /// Computes the strides given the number of intervals (dims) per axis.
     /// For dims = [d0, d1, ..., d(p-1)], the stride for axis i is
     /// product_{j=i+1}^{p-1} d_j.
@@ -352,7 +345,7 @@ impl GridIndex {
             strides: &[usize],
             current_index: usize,
             dims: &[usize],
-            cells: &HashMap<usize, Vec<usize>>,
+            cells: &FxHashMap<usize, Vec<usize>>,
             result: &mut Vec<usize>,
         ) {
             if axis == p {
