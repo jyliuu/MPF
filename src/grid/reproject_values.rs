@@ -25,7 +25,8 @@ pub fn reproject_grid_values(
                 let mut denominator = 0.0;
 
                 for cell_idx in &grid_cells_along_dim[dim][idx] {
-                    for &i in &grid_index.cells[*cell_idx] {
+                    let curr_cell_points_idx = grid_index.cells.get(cell_idx).unwrap();
+                    for &i in curr_cell_points_idx {
                         let numerator_sum: f64 = residuals[i] * y_hat[i];
                         let denominator_sum = denominator + y_hat[i].powi(2);
 
@@ -41,7 +42,8 @@ pub fn reproject_grid_values(
                 *x *= v_hat;
 
                 for cell_idx in &grid_cells_along_dim[dim][idx] {
-                    for &i in &grid_index.cells[*cell_idx] {
+                    let curr_cell_points_idx = grid_index.cells.get(cell_idx).unwrap();
+                    for &i in curr_cell_points_idx {
                         y_hat[i] *= v_hat;
                         residuals[i] = labels[i] - y_hat[i];
                     }

@@ -3,7 +3,6 @@ use ndarray::{Array1, ArrayView2, Axis};
 
 use crate::FittedModel;
 
-pub mod candidates;
 mod fitter;
 pub mod grid_index;
 mod reproject_values;

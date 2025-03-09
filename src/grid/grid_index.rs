@@ -1,10 +1,12 @@
 use ndarray::{ArrayView1, ArrayView2};
+use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
 use std::ops::Range;
 
 /// GridIndex represents a p-dimensional grid over a set of n points.
 /// Each axis is partitioned by (possibly empty) sorted boundaries. Initially,
 /// no boundaries exist so each axis spans (-∞, ∞) and the grid has one cell containing all points.
+/// This implementation uses a HashMap for cell storage to efficiently handle sparse data.
 
 #[derive(Debug, Clone)]
 pub struct GridIndex {
@@ -13,9 +15,10 @@ pub struct GridIndex {
     pub boundaries: Vec<Vec<f64>>,
     pub intervals: Vec<Vec<(f64, f64)>>,
     pub observation_counts: Vec<Vec<usize>>,
-    /// Flattened grid cells. Each cell holds a vector of point indices.
+    /// Sparse grid cells. Each cell holds a vector of point indices.
     /// The flat index is computed using precomputed strides.
-    pub cells: Vec<Vec<usize>>,
+    /// Only cells that contain points are stored in the HashMap.
+    pub cells: FxHashMap<usize, Vec<usize>>,
     /// Strides for flattening multi-dimensional cell indices.
     pub strides: Vec<usize>,
 }
@@ -31,8 +34,9 @@ impl GridIndex {
         // Each axis has one interval (no boundaries => one interval).
         let dims: Vec<usize> = vec![1; p];
         let strides = Self::compute_strides(&dims);
-        // Only one cell, containing all point indices.
-        let cells = vec![(0..n).collect()];
+        // Only one cell (at index 0), containing all point indices.
+        let mut cells = FxHashMap::with_capacity_and_hasher(1, Default::default());
+        cells.insert(0, (0..n).collect());
         let intervals = vec![vec![(f64::NEG_INFINITY, f64::INFINITY)]; p];
         let observation_counts = vec![vec![n]; p];
         GridIndex {
@@ -71,16 +75,100 @@ impl GridIndex {
             boundaries,
             intervals,
             observation_counts: vec![],
-            cells: vec![],
+            cells: FxHashMap::default(),
             strides: Self::compute_strides(&dims),
         };
-        grid_index.reassign_cells(points);
+        grid_index.assign_cells(points);
         grid_index
     }
 
     /// Returns the current number of intervals (cells) along each axis.
     pub fn current_dims(&self) -> Vec<usize> {
         self.intervals.iter().map(|i| i.len()).collect()
+    }
+
+    /// Splits the grid globally along the given axis by inserting `split` as a new boundary.
+    /// If the split is already present, nothing is changed.
+    /// After updating boundaries, the grid's strides are recomputed and all points are reassigned.
+    pub fn split_axis(
+        &mut self,
+        cells_affected: &[usize],
+        axis: usize,
+        split: f64,
+        points: ArrayView2<'_, f64>,
+    ) -> (usize, usize) {
+        // Insert the new split value into the boundaries for this axis if not already present.
+        let pos = self.compute_col_index_for_point(axis, split);
+        let (curr_start, curr_end) = self.intervals[axis][pos];
+        self.intervals[axis][pos] = (curr_start, split);
+        self.intervals[axis].insert(pos + 1, (split, curr_end));
+        self.boundaries[axis].insert(pos, split);
+
+        // Store the old strides before recomputing
+        let old_strides = self.strides.clone();
+
+        // Recompute dimensions and strides.
+        let dims = self.current_dims();
+        self.strides = Self::compute_strides(&dims);
+
+        let estimated_nonempty = self.cells.len();
+        let mut new_cells =
+            FxHashMap::with_capacity_and_hasher(estimated_nonempty, Default::default());
+
+        // Create set of affected cells for faster lookup
+        let affected_set: std::collections::HashSet<usize> =
+            cells_affected.iter().copied().collect();
+
+        // Handle unaffected cells - correctly remap the keys
+        let mut to_move = Vec::new();
+        for &old_flat_idx in self.cells.keys() {
+            if !affected_set.contains(&old_flat_idx) {
+                let mut new_flat_idx = 0;
+                let mut remainder = old_flat_idx;
+                for (i, &stride) in old_strides.iter().enumerate() {
+                    let coord = remainder / stride;
+                    remainder %= stride;
+                    let new_coord = if i == axis && coord > pos {
+                        coord + 1
+                    } else {
+                        coord
+                    };
+                    new_flat_idx += new_coord * self.strides[i];
+                }
+                to_move.push((old_flat_idx, new_flat_idx));
+            }
+        }
+
+        // Move vectors from old keys to new keys without cloning
+        for (old_idx, new_idx) in to_move {
+            if let Some(points_idx) = self.cells.remove(&old_idx) {
+                new_cells.insert(new_idx, points_idx);
+            }
+        }
+
+        // Update observation counts
+        self.observation_counts[axis][pos] = 0;
+        self.observation_counts[axis].insert(pos + 1, 0);
+
+        for &cell_idx in cells_affected {
+            if let Some(cell_points) = self.cells.remove(&cell_idx) {
+                // Reassign only the points from affected cells
+                for i in cell_points {
+                    let point = points.row(i);
+                    let (cell_idx, cartesian) = self.compute_cell_index_for_point(point);
+
+                    // Add point to the appropriate cell
+                    new_cells.entry(cell_idx).or_insert_with(Vec::new).push(i);
+
+                    // Update observation counts
+                    self.observation_counts[axis][cartesian[axis]] += 1;
+                }
+            }
+        }
+
+        self.cells = new_cells;
+
+        (pos, pos + 1)
     }
 
     /// Computes the strides given the number of intervals (dims) per axis.
@@ -124,41 +212,12 @@ impl GridIndex {
             .unwrap_or_else(|i| i)
     }
 
-    /// Reassigns all points into cells according to the current boundaries.
-    fn reassign_cells(&mut self, points: ArrayView2<'_, f64>) {
-        let dims = self.current_dims();
-        let total_cells: usize = dims.iter().product();
-        // Create a new vector of empty cells.
-        let mut new_cells = vec![Vec::new(); total_cells];
-        let mut new_observation_counts: Vec<Vec<usize>> =
-            dims.iter().map(|d| vec![0; *d]).collect();
+    fn assign_cells(&mut self, points: ArrayView2<'_, f64>) {
         for i in 0..points.nrows() {
             let point = points.row(i);
-            let (cell_index, cartesian_index) = self.compute_cell_index_for_point(point);
-            new_cells[cell_index].push(i);
-            for (j, &idx) in cartesian_index.iter().enumerate() {
-                new_observation_counts[j][idx] += 1;
-            }
+            let (cell_idx, _) = self.compute_cell_index_for_point(point);
+            self.cells.entry(cell_idx).or_default().push(i);
         }
-        self.cells = new_cells;
-        self.observation_counts = new_observation_counts;
-    }
-
-    /// Splits the grid globally along the given axis by inserting `split` as a new boundary.
-    /// If the split is already present, nothing is changed.
-    /// After updating boundaries, the grid's strides are recomputed and all points are reassigned.
-    pub fn split_axis(&mut self, axis: usize, split: f64, points: ArrayView2<'_, f64>) {
-        // Insert the new split value into the boundaries for this axis if not already present.
-        let pos = self.compute_col_index_for_point(axis, split);
-        let (curr_start, curr_end) = self.intervals[axis][pos];
-        self.intervals[axis][pos] = (curr_start, split);
-        self.intervals[axis].insert(pos + 1, (split, curr_end));
-        self.boundaries[axis].insert(pos, split);
-        // Recompute dimensions and strides.
-        let dims = self.current_dims();
-        self.strides = Self::compute_strides(&dims);
-        // Reassign all points to their new cells.
-        self.reassign_cells(points);
     }
 
     /// Performs a query on a single cell. The cell is identified by a slice of cell indices,
@@ -166,7 +225,7 @@ impl GridIndex {
     /// the second interval on axis 1.
     ///
     /// Returns an Option containing a slice of point indices, or None if the length of
-    /// `cell_indices` does not match the number of axes.
+    /// `cell_indices` does not match the number of axes or if the cell is empty.
     pub fn query(&self, cell_indices: &[usize]) -> Option<&[usize]> {
         if cell_indices.len() != self.boundaries.len() {
             return None;
@@ -177,15 +236,20 @@ impl GridIndex {
             .zip(self.strides.iter())
             .map(|(&ci, &stride)| ci * stride)
             .sum();
-        self.cells.get(flat_index).map(|v| &v[..])
+
+        // Look up the cell in the HashMap
+        self.cells.get(&flat_index).map(|v| &v[..])
     }
+
     pub fn collect_fixed_axis_cells(&self, fixed_axis: usize, fixed_index: usize) -> Vec<usize> {
+        // A recursive helper function that builds multi-dimensional indices.
+        // This function is used to collect all cell_idx for a fixed axis and index.
+        // IMPORTANT: This function returns a list of cell_idx, not point_idx!
         let p = self.boundaries.len();
         let dims = self.current_dims();
         let strides = &self.strides;
         let mut result = Vec::new();
 
-        // A recursive helper function that builds multi-dimensional indices.
         fn recurse(
             current_dim: usize,
             dims: &[usize],
@@ -197,12 +261,10 @@ impl GridIndex {
             result: &mut Vec<usize>,
         ) {
             if current_dim == dims.len() {
-                // At a full multi-dimensional index; record the flat index.
                 result.push(current_flat);
                 return;
             }
             if current_dim == fixed_axis {
-                // For the fixed axis, we know the index.
                 current_indices.push(fixed_index);
                 recurse(
                     current_dim + 1,
@@ -243,6 +305,7 @@ impl GridIndex {
             &mut Vec::with_capacity(p),
             &mut result,
         );
+        result.retain(|cell| self.cells.contains_key(cell));
         result
     }
 
@@ -274,11 +337,12 @@ impl GridIndex {
             strides: &[usize],
             current_index: usize,
             dims: &[usize],
-            cells: &[Vec<usize>],
+            cells: &FxHashMap<usize, Vec<usize>>,
             result: &mut Vec<usize>,
         ) {
             if axis == p {
-                if let Some(cell) = cells.get(current_index) {
+                // Only try to access cells that exist in the HashMap
+                if let Some(cell) = cells.get(&current_index) {
                     result.extend(cell);
                 }
                 return;
@@ -326,7 +390,7 @@ mod tests {
         let grid = GridIndex::new(points.view());
         // Initially, there is only one cell containing all points.
         assert_eq!(grid.cells.len(), 1);
-        assert_eq!(grid.cells[0].len(), 5);
+        assert_eq!(grid.cells.get(&0).unwrap().len(), 5);
     }
 
     #[test]
@@ -345,7 +409,7 @@ mod tests {
         let mut grid = GridIndex::new(points.view());
 
         // Split axis 0 (x-coordinate) at 0.0.
-        grid.split_axis(0, 0.0, points.view());
+        grid.split_axis(&[0], 0, 0.0, points.view());
         // Now, for axis 0 there should be 2 intervals.
         let dims = grid.current_dims();
         assert_eq!(dims[0], 2);
@@ -358,11 +422,11 @@ mod tests {
         assert_eq!(cell_neg.len(), 3);
 
         // Split axis 1 (y-coordinate) at 0.0.
-        grid.split_axis(1, 0.0, points.view());
+        grid.split_axis(&[0, 1], 1, 0.0, points.view());
         let dims = grid.current_dims();
         assert_eq!(dims, vec![2, 2]);
-        // Now there are 2*2 = 4 cells.
-        assert_eq!(grid.cells.len(), 4);
+        // Now there are 2*2 = 4 cells, but we might not have points in all of them
+        assert!(grid.cells.len() <= 4 && !grid.cells.is_empty());
 
         // Query the cell with x < 0 and y < 0, i.e. cell indices [0, 0].
         let cell_neg_neg = grid.query(&[0, 0]).unwrap();
