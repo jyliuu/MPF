@@ -460,8 +460,11 @@ mod tests {
             assert_float_eq!(refine_candidate.update_a, -81.09657885629389, 1e-10);
             assert_float_eq!(refine_candidate.update_b, 739.869209706645, 1e-10);
             tree_grid.update_tree(refine_candidate);
+            assert_eq!(
+                tree_grid.grid_index.observation_counts,
+                vec![vec![18, 2], vec![20]]
+            )
         }
-        println!("{:?}", tree_grid.grid_index);
         {
             let (err_new, err_old, refine_candidate) =
                 find_refine_candidate_closure(&tree_grid, x[[12, 0]], 0);
@@ -471,6 +474,10 @@ mod tests {
             assert_float_eq!(refine_candidate.update_a, 8.058693908258093, 1e-10);
             assert_float_eq!(refine_candidate.update_b, 0.5847827112789354, 1e-10);
             tree_grid.update_tree(refine_candidate);
+            assert_eq!(
+                tree_grid.grid_index.observation_counts,
+                vec![vec![1, 17, 2], vec![20]]
+            );
         }
         {
             let (err_new, err_old, refine_candidate) =
@@ -481,6 +488,10 @@ mod tests {
             assert_float_eq!(refine_candidate.update_a, -6.832210436114132, 1e-10);
             assert_float_eq!(refine_candidate.update_b, 3.409910903419733, 1e-10);
             tree_grid.update_tree(refine_candidate);
+            assert_eq!(
+                tree_grid.grid_index.observation_counts,
+                vec![vec![1, 4, 13, 2], vec![20]]
+            );
         }
         {
             let (err_new, err_old, refine_candidate) =
@@ -491,6 +502,10 @@ mod tests {
             assert_float_eq!(refine_candidate.update_a, 0.8256919200067316, 1e-10);
             assert_float_eq!(refine_candidate.update_b, 1.9098338089112117, 1e-10);
             tree_grid.update_tree(refine_candidate);
+            assert_eq!(
+                tree_grid.grid_index.observation_counts,
+                vec![vec![1, 4, 13, 2], vec![12, 8]]
+            );
         }
         {
             let (err_new, err_old, refine_candidate) =
@@ -501,6 +516,10 @@ mod tests {
             assert_float_eq!(refine_candidate.update_a, 1.2412453820291502, 1e-10);
             assert_float_eq!(refine_candidate.update_b, -0.11462749920417181, 1e-10);
             tree_grid.update_tree(refine_candidate);
+            assert_eq!(
+                tree_grid.grid_index.observation_counts,
+                vec![vec![1, 4, 13, 2], vec![5, 7, 8]]
+            );
         }
         {
             let (err_new, err_old, refine_candidate) =
@@ -511,6 +530,10 @@ mod tests {
             assert_float_eq!(refine_candidate.update_a, 3.691670930826113, 1e-10);
             assert_float_eq!(refine_candidate.update_b, 0.7617522326677412, 1e-10);
             tree_grid.update_tree(refine_candidate);
+            assert_eq!(
+                tree_grid.grid_index.observation_counts,
+                vec![vec![1, 4, 2, 11, 2], vec![5, 7, 8]]
+            );
         }
         {
             let (err_new, err_old, refine_candidate) =
@@ -521,7 +544,10 @@ mod tests {
             assert_float_eq!(refine_candidate.update_a, 0.6518311983217222, 1e-10);
             assert_float_eq!(refine_candidate.update_b, 2.828492111820738, 1e-10);
             tree_grid.update_tree(refine_candidate);
+            assert_eq!(
+                tree_grid.grid_index.observation_counts,
+                vec![vec![1, 4, 2, 7, 4, 2], vec![5, 7, 8]]
+            );
         }
-        println!("tree_grid.grid_index {:?}", tree_grid.grid_index);
     }
 }

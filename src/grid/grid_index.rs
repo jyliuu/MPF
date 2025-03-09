@@ -97,10 +97,6 @@ impl GridIndex {
         split: f64,
         points: ArrayView2<'_, f64>,
     ) {
-        println!(
-            "Observation counts before split: {:#?}",
-            self.observation_counts
-        );
         // Insert the new split value into the boundaries for this axis if not already present.
         let pos = self.compute_col_index_for_point(axis, split);
         let (curr_start, curr_end) = self.intervals[axis][pos];
@@ -114,10 +110,6 @@ impl GridIndex {
         // Recompute dimensions and strides.
         let dims = self.current_dims();
         self.strides = Self::compute_strides(&dims);
-
-        // Update observation counts
-        self.observation_counts[axis][pos] = 0;
-        self.observation_counts[axis].insert(pos + 1, 0);
 
         let estimated_nonempty = self.cells.len();
         let mut new_cells =
@@ -154,28 +146,26 @@ impl GridIndex {
             }
         }
 
-        // Get all points from affected cells - take ownership directly
-        let mut points_to_reassign = Vec::new();
+        // Update observation counts
+        self.observation_counts[axis][pos] = 0;
+        self.observation_counts[axis].insert(pos + 1, 0);
+
         for &cell_idx in cells_affected {
             if let Some(cell_points) = self.cells.remove(&cell_idx) {
-                // Take ownership of all points in the affected cells
-                points_to_reassign.extend(cell_points);
+                // Reassign only the points from affected cells
+                for i in cell_points {
+                    let point = points.row(i);
+                    let (cell_idx, cartesian) = self.compute_cell_index_for_point(point);
+
+                    // Add point to the appropriate cell
+                    new_cells.entry(cell_idx).or_insert_with(Vec::new).push(i);
+
+                    // Update observation counts
+                    self.observation_counts[axis][cartesian[axis]] += 1;
+                }
             }
         }
 
-        // Reassign only the points from affected cells
-        for &i in &points_to_reassign {
-            let point = points.row(i);
-            let (cell_idx, cartesian) = self.compute_cell_index_for_point(point);
-
-            // Add point to the appropriate cell
-            new_cells.entry(cell_idx).or_insert_with(Vec::new).push(i);
-
-            // Update observation counts
-            for (j, &idx) in cartesian.iter().enumerate() {
-                self.observation_counts[j][idx] += 1;
-            }
-        }
         self.cells = new_cells;
     }
 
