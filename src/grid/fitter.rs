@@ -3,12 +3,10 @@ use rand::Rng;
 
 use crate::FitResult;
 
-use crate::grid::candidates::update_predictions;
 use crate::grid::params::{SplitStrategyParams, TreeGridParams};
 use crate::grid::splitting::{IntervalRandomSplit, RandomSplit, SplitStrategy};
 use crate::grid::FittedTreeGrid;
 
-use super::candidates::RefineCandidate;
 use super::grid_index::GridIndex;
 use super::identification::{IdentificationStrategy, L1Identification, L2Identification};
 use super::params::IdentificationStrategyParams;
@@ -92,30 +90,38 @@ impl TreeGridFitter<'_> {
             col,
             split,
             index,
-            left,
-            right,
             update_a,
             update_b,
             a_points_idx,
             b_points_idx,
-            curr_leaf_points_idx,
+            cells,
         } = refine_candidate;
 
         let old_grid_value = self.grid_values[col][index];
         self.grid_values[col][index] *= update_a;
         self.grid_values[col].insert(index + 1, old_grid_value * update_b);
 
-        self.grid_index.split_axis(col, split, self.x.view());
+        self.grid_index
+            .split_axis(&cells, col, split, self.x.view());
 
-        update_predictions(
-            &mut self.y_hat,
-            &mut self.residuals,
-            self.labels,
-            &a_points_idx,
-            &b_points_idx,
-            update_a,
-            update_b,
-        );
+        self.update_predictions(&a_points_idx, &b_points_idx, update_a, update_b);
+    }
+
+    fn update_predictions(
+        &mut self,
+        a_points_idx: &[usize],
+        b_points_idx: &[usize],
+        update_a: f64,
+        update_b: f64,
+    ) {
+        for &i in a_points_idx {
+            self.y_hat[i] *= update_a;
+            self.residuals[i] = self.labels[i] - self.y_hat[i];
+        }
+        for &i in b_points_idx {
+            self.y_hat[i] *= update_b;
+            self.residuals[i] = self.labels[i] - self.y_hat[i];
+        }
     }
 }
 
@@ -217,6 +223,18 @@ impl<'a> TreeGridFitter<'a> {
     }
 }
 
+#[derive(Debug)]
+pub struct RefineCandidate {
+    pub col: usize,
+    pub split: f64,
+    pub index: usize,
+    pub update_a: f64,
+    pub update_b: f64,
+    pub a_points_idx: Vec<usize>,
+    pub b_points_idx: Vec<usize>,
+    pub cells: Vec<usize>,
+}
+
 pub fn find_refine_candidate(
     split: f64,
     col: usize,
@@ -238,16 +256,15 @@ pub fn find_refine_candidate(
     let mut b_points_idx = Vec::new();
 
     // First pass: Accumulate sums and collect indices
-    for cell_idx in cells {
-        let coordinates = grid_index.get_cartesian_coordinates(cell_idx);
+    for cell_idx in &cells {
+        let coordinates = grid_index.get_cartesian_coordinates(*cell_idx);
         let v = coordinates
             .iter()
             .enumerate()
             .map(|(i, &idx)| grid_values[i][idx])
             .product::<f64>();
         let v_pow2 = v.powi(2);
-        // let curr_leaf_points_idx = &grid_index.cells[cell_idx];
-        let curr_leaf_points_idx = grid_index.cells.get(&cell_idx).unwrap();
+        let curr_leaf_points_idx = grid_index.cells.get(cell_idx).unwrap();
 
         for &i in curr_leaf_points_idx {
             let x_val = x[[i, col]];
@@ -285,22 +302,15 @@ pub fn find_refine_candidate(
         err_new += new_res.powi(2);
     }
 
-    // Construct refine candidate
-    let original_interval = grid_index.intervals[col][index];
-    let left = (original_interval.0, split);
-    let right = (split, original_interval.1);
-
     let refine_candidate = RefineCandidate {
         col,
         split,
         index,
-        left,
-        right,
         update_a,
         update_b,
         a_points_idx,
         b_points_idx,
-        curr_leaf_points_idx: Vec::new(),
+        cells,
     };
 
     Ok((err_new, err_old, refine_candidate))
@@ -451,6 +461,7 @@ mod tests {
             assert_float_eq!(refine_candidate.update_b, 739.869209706645, 1e-10);
             tree_grid.update_tree(refine_candidate);
         }
+        println!("{:?}", tree_grid.grid_index);
         {
             let (err_new, err_old, refine_candidate) =
                 find_refine_candidate_closure(&tree_grid, x[[12, 0]], 0);
