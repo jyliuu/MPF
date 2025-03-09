@@ -96,7 +96,7 @@ impl GridIndex {
         axis: usize,
         split: f64,
         points: ArrayView2<'_, f64>,
-    ) {
+    ) -> (usize, usize) {
         // Insert the new split value into the boundaries for this axis if not already present.
         let pos = self.compute_col_index_for_point(axis, split);
         let (curr_start, curr_end) = self.intervals[axis][pos];
@@ -167,6 +167,8 @@ impl GridIndex {
         }
 
         self.cells = new_cells;
+
+        (pos, pos + 1)
     }
 
     /// Computes the strides given the number of intervals (dims) per axis.
