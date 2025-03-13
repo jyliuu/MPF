@@ -89,7 +89,18 @@ impl TreeGridFamilyBoostedPy {
             Ok(TreeGridPy::from(combined_tree_grid.clone()))
         } else {
             Err(PyErr::new::<pyo3::exceptions::PyAttributeError, _>(
-                "No combined tree grid, rerun with `combination='arith_mean'` or `combination='median'`!",
+                "No combined tree grid, rerun with `combination_strategy`!",
+            ))
+        }
+    }
+
+    #[getter]
+    pub fn get_candidate_indices(&self) -> PyResult<Vec<usize>> {
+        if let Some(candidate_indices) = self.0.get_candidate_indices() {
+            Ok(candidate_indices.to_vec())
+        } else {
+            Err(PyErr::new::<pyo3::exceptions::PyAttributeError, _>(
+                "No candidate indices, rerun with `combination_strategy`!",
             ))
         }
     }

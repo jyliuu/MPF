@@ -259,7 +259,7 @@ pub fn combine_into_single_tree_grid<I>(
     grids: &[FittedTreeGrid],
     points: ArrayView2<f64>,
     similarity_threshold: f64,
-) -> FittedTreeGrid
+) -> (Vec<usize>, FittedTreeGrid)
 where
     I: CombinationStrategy,
 {
@@ -295,7 +295,7 @@ where
     // Existing filtering logic
     let keep_count = ((1.0 - similarity_threshold) * grids.len() as f64).round() as usize;
     let inner_products = &pairwise_ips[reference_idx];
-    let (grids, filtered_inner_products): (Vec<&FittedTreeGrid>, Vec<Vec<f64>>) = inner_products
+    let candidate_indices: Vec<usize> = inner_products
         .iter()
         .enumerate()
         .map(|(i, ips)| {
@@ -309,16 +309,16 @@ where
         })
         .sorted_unstable_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap())
         .take(keep_count)
-        .map(|(i, _)| (&grids[i], inner_products[i].clone()))
-        .unzip();
-    println!("Candidate indices: {:?}", grids.len());
-
-    let aligned_signs: Vec<Vec<f64>> = filtered_inner_products
+        .map(|(i, _)| i)
+        .collect();
+    println!("Candidate indices: {:?}", candidate_indices.len());
+    let candidates: Vec<&FittedTreeGrid> = candidate_indices.iter().map(|&i| &grids[i]).collect();
+    let aligned_signs: Vec<Vec<f64>> = candidate_indices
         .iter()
-        .map(|inner_products| inner_products.iter().map(|ip| ip.signum()).collect())
+        .map(|&i| inner_products[i].iter().map(|ip| ip.signum()).collect())
         .collect();
 
-    let num_axes = grids[0].grid_index.intervals.len();
+    let num_axes = candidates[0].grid_index.intervals.len();
 
     let mut combined_splits: Vec<Vec<f64>> = Vec::with_capacity(num_axes);
     let mut combined_intervals: Vec<Vec<(f64, f64)>> = Vec::with_capacity(num_axes);
@@ -326,7 +326,7 @@ where
 
     for axis in 0..num_axes {
         // Collect and deduplicate splits
-        let mut splits: Vec<f64> = grids
+        let mut splits: Vec<f64> = candidates
             .iter()
             .flat_map(|grid| grid.grid_index.boundaries[axis].iter().copied()) // Avoid cloning, just copy f64
             .collect();
@@ -352,8 +352,8 @@ where
 
         // For each new interval, combine grid values from all treegrids
         for &(a, b) in &new_intervals {
-            let mut values: Vec<f64> = Vec::with_capacity(grids.len());
-            for (grid_index, grid) in grids.iter().enumerate() {
+            let mut values: Vec<f64> = Vec::with_capacity(candidates.len());
+            for (grid_index, grid) in candidates.iter().enumerate() {
                 // Efficiently find the grid value for the interval [a, b)
                 for (interval_index, &(ia, ib)) in
                     grid.grid_index.intervals[axis].iter().enumerate()
@@ -381,7 +381,8 @@ where
 
     FittedTreeGrid::new(
         combined_grid_values,
-        1.0,
+        combined_scaling,
         GridIndex::from_boundaries_and_points(combined_splits, points),
-    )
+    );
+    (candidate_indices, combined_grid)
 }

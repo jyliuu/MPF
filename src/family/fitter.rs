@@ -73,7 +73,7 @@ pub fn fit<R: Rng + ?Sized>(
         })
         .collect();
 
-    let combined_tree_grid = match *combination_strategy {
+    let combined_result = match *combination_strategy {
         CombinationStrategyParams::ArithMean(similarity_threshold) => {
             Some(combine_into_single_tree_grid::<ArithmeticMean>(
                 &tree_grids,
@@ -100,7 +100,20 @@ pub fn fit<R: Rng + ?Sized>(
         }
         _ => None,
     };
-    let mut tgf = TreeGridFamily(tree_grids, BoostedVariant { combined_tree_grid });
+
+    let boosted_information = if let Some((candidate_indices, combined_tree_grid)) = combined_result
+    {
+        BoostedVariant {
+            combined_tree_grid: Some(combined_tree_grid),
+            candidate_indices: Some(candidate_indices),
+        }
+    } else {
+        BoostedVariant {
+            combined_tree_grid: None,
+            candidate_indices: None,
+        }
+    };
+    let mut tgf: TreeGridFamily<BoostedVariant> = TreeGridFamily(tree_grids, boosted_information);
     let mut preds = tgf.predict(x);
 
     if let Some(combined_tree_grid) = &mut tgf.1.combined_tree_grid {

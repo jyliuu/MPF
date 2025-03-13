@@ -29,6 +29,7 @@ use crate::FittedModel;
 #[derive(Debug, Clone)]
 pub struct BoostedVariant {
     pub combined_tree_grid: Option<FittedTreeGrid>,
+    pub candidate_indices: Option<Vec<usize>>,
 }
 
 impl AggregationMethod for BoostedVariant {
@@ -38,6 +39,10 @@ impl AggregationMethod for BoostedVariant {
 impl TreeGridFamily<BoostedVariant> {
     pub fn get_combined_tree_grid(&self) -> Option<&FittedTreeGrid> {
         self.1.combined_tree_grid.as_ref()
+    }
+
+    pub fn get_candidate_indices(&self) -> Option<&[usize]> {
+        self.1.candidate_indices.as_deref()
     }
 
     fn predict_majority_voted_sign(&self, x: ArrayView2<f64>) -> Array1<f64> {
