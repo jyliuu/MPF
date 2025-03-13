@@ -29,6 +29,7 @@ pub fn fit<R: Rng + ?Sized>(
         bootstrap,
         tg_params,
         combination_strategy,
+        optimize_scaling,
     } = hyperparameters;
     let n = x.nrows();
 
@@ -116,11 +117,12 @@ pub fn fit<R: Rng + ?Sized>(
     let mut tgf: TreeGridFamily<BoostedVariant> = TreeGridFamily(tree_grids, boosted_information);
     let mut preds = tgf.predict(x);
 
-    if let Some(combined_tree_grid) = &mut tgf.1.combined_tree_grid {
-        let scaling = optimal_scaling(y.view(), preds.view());
-        combined_tree_grid.scaling = scaling;
-        preds *= scaling;
-        println!("Optimal combined scaling: {:?}", scaling);
+    if *optimize_scaling {
+        if let Some(combined_tree_grid) = &mut tgf.1.combined_tree_grid {
+            let scaling = optimal_scaling(y.view(), preds.view());
+            combined_tree_grid.scaling *= scaling;
+            preds *= scaling;
+        }
     }
     let residuals = &y - &preds;
     let err = residuals.pow2().mean().unwrap();

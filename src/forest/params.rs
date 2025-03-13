@@ -78,6 +78,11 @@ impl MPFBoostedParamsBuilder {
         self
     }
 
+    pub fn optimize_scaling(mut self, optimize_scaling: bool) -> Self {
+        self.tgf_params_builder = self.tgf_params_builder.optimize_scaling(optimize_scaling);
+        self
+    }
+
     pub fn build(self) -> MPFBoostedParams {
         MPFBoostedParams {
             epochs: self.epochs,

@@ -134,6 +134,7 @@ class MPF:
             identification_strategy: str = "l2",
             combination_strategy: str = "arith_mean",
             reproject_grid_values: bool = True,
+            optimize_scaling: bool = False,
             similarity_threshold: float = 0.0,
             seed: int = 42
         ) -> tuple["MPF.Boosted", "FitResult"]:
@@ -152,8 +153,9 @@ class MPF:
                 identification_strategy,
                 combination_strategy, 
                 reproject_grid_values,
+                optimize_scaling,
                 similarity_threshold,
-                seed
+                seed,
             )
             instance = cls(mpf_boosted)
             instance._tree_grid_families_lst = [[TreeGrid(tg) for tg in tf.tree_grids] for tf in instance.tree_grid_families]

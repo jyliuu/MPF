@@ -379,7 +379,13 @@ where
         combined_splits.push(splits);
     }
 
-    FittedTreeGrid::new(
+    let scalings = candidates
+        .iter()
+        .map(|grid| grid.scaling)
+        .collect::<Vec<f64>>();
+    let combined_scaling = I::combine_values(&scalings);
+
+    let combined_grid = FittedTreeGrid::new(
         combined_grid_values,
         combined_scaling,
         GridIndex::from_boundaries_and_points(combined_splits, points),

@@ -17,6 +17,7 @@ pub struct TreeGridFamilyBoostedParams {
     pub bootstrap: bool,
     pub tg_params: TreeGridParams,
     pub combination_strategy: CombinationStrategyParams,
+    pub optimize_scaling: bool,
 }
 
 // Builder for TreeGridFamilyBoostedParams
@@ -26,6 +27,7 @@ pub struct TreeGridFamilyBoostedParamsBuilder {
     bootstrap: bool,
     tg_params_builder: TreeGridParamsBuilder,
     combination_strategy: CombinationStrategyParams,
+    optimize_scaling: bool,
 }
 
 impl TreeGridFamilyBoostedParamsBuilder {
@@ -35,6 +37,7 @@ impl TreeGridFamilyBoostedParamsBuilder {
             bootstrap: false,
             tg_params_builder: TreeGridParamsBuilder::new(),
             combination_strategy: CombinationStrategyParams::ArithMean(0.1),
+            optimize_scaling: false,
         }
     }
 
@@ -81,12 +84,18 @@ impl TreeGridFamilyBoostedParamsBuilder {
         self
     }
 
+    pub fn optimize_scaling(mut self, optimize_scaling: bool) -> Self {
+        self.optimize_scaling = optimize_scaling;
+        self
+    }
+
     pub fn build(self) -> TreeGridFamilyBoostedParams {
         TreeGridFamilyBoostedParams {
             n_trees: self.n_trees,
             bootstrap: self.bootstrap,
             tg_params: self.tg_params_builder.build(),
             combination_strategy: self.combination_strategy,
+            optimize_scaling: self.optimize_scaling,
         }
     }
 }

@@ -168,6 +168,7 @@ impl MPFBoostedPy {
         identification_strategy: u8,
         combination_strategy: u8,
         reproject_grid_values: bool,
+        optimize_scaling: bool,
         similarity_threshold: f64,
         seed: u64,
     ) -> PyResult<(MPFBoostedPy, FitResultPy)> {
@@ -194,6 +195,7 @@ impl MPFBoostedPy {
                 },
             })
             .reproject_grid_values(reproject_grid_values)
+            .optimize_scaling(optimize_scaling)
             .combination_strategy(match combination_strategy {
                 1 => CombinationStrategyParams::ArithMean(similarity_threshold),
                 2 => CombinationStrategyParams::Median(similarity_threshold),
