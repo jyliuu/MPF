@@ -12,10 +12,10 @@ pub enum SplitStrategyParams {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CombinationStrategyParams {
-    ArithMean,
-    Median,
-    ArithmeticGeometricMean,
-    GeometricMean,
+    ArithMean(f64),
+    Median(f64),
+    ArithmeticGeometricMean(f64),
+    GeometricMean(f64),
     None,
 }
 

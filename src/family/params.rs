@@ -25,7 +25,7 @@ impl TreeGridFamilyBoostedParamsBuilder {
             n_trees: 100,
             bootstrap: false,
             tg_params_builder: TreeGridParamsBuilder::new(),
-            combination_strategy: CombinationStrategyParams::ArithMean,
+            combination_strategy: CombinationStrategyParams::ArithMean(0.1),
         }
     }
 

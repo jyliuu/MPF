@@ -6,10 +6,10 @@ use crate::{
     FitResult, FittedModel,
 };
 
-use super::{params::TreeGridFamilyBoostedParams, BoostedVariant, FittedTreeGrid, TreeGridFamily};
 use super::combine_grids::{
     combine_into_single_tree_grid, ArithmeticGeometricMean, ArithmeticMean, GeometricMean, Median,
 };
+use super::{params::TreeGridFamilyBoostedParams, BoostedVariant, FittedTreeGrid, TreeGridFamily};
 
 #[cfg(feature = "use-rayon")]
 use rayon::prelude::*;
@@ -69,40 +69,36 @@ pub fn fit<R: Rng + ?Sized>(
         })
         .collect();
 
-    let (ref_idx, reference) = tree_grids
-        .iter()
-        .enumerate()
-        .min_by(|(i, _), (j, _)| {
-            fit_results[*i]
-                .err
-                .partial_cmp(&fit_results[*j].err)
-                .unwrap()
-        })
-        .unwrap();
-
-    println!("reference: {:?}", fit_results[ref_idx].err);
 
     let combined_tree_grid = match *combination_strategy {
-        CombinationStrategyParams::ArithMean => Some(
-            combine_into_single_tree_grid::<ArithmeticMean>(&tree_grids, reference, x.view()),
-        ),
-        CombinationStrategyParams::Median => Some(combine_into_single_tree_grid::<Median>(
-            &tree_grids,
-            reference,
-            x.view(),
-        )),
-        CombinationStrategyParams::ArithmeticGeometricMean => {
-            Some(combine_into_single_tree_grid::<ArithmeticGeometricMean>(
+        CombinationStrategyParams::ArithMean(similarity_threshold) => {
+            Some(combine_into_single_tree_grid::<ArithmeticMean>(
                 &tree_grids,
-                reference,
                 x.view(),
+                similarity_threshold,
             ))
         }
-        CombinationStrategyParams::GeometricMean => Some(combine_into_single_tree_grid::<
-            GeometricMean,
-        >(
-            &tree_grids, reference, x.view()
-        )),
+        CombinationStrategyParams::Median(similarity_threshold) => {
+            Some(combine_into_single_tree_grid::<Median>(
+                &tree_grids,
+                x.view(),
+                similarity_threshold,
+            ))
+        }
+        CombinationStrategyParams::ArithmeticGeometricMean(similarity_threshold) => {
+            Some(combine_into_single_tree_grid::<ArithmeticGeometricMean>(
+                &tree_grids,
+                x.view(),
+                similarity_threshold,
+            ))
+        }
+        CombinationStrategyParams::GeometricMean(similarity_threshold) => {
+            Some(combine_into_single_tree_grid::<GeometricMean>(
+                &tree_grids,
+                x.view(),
+                similarity_threshold,
+            ))
+        }
         _ => None,
     };
     let mut tgf = TreeGridFamily(tree_grids, BoostedVariant { combined_tree_grid });

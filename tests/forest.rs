@@ -5,7 +5,9 @@ mod tests {
     use super::test_data::setup_data_csv;
     use mpf::{
         forest::{fit_boosted, params::MPFBoostedParamsBuilder},
-        grid::params::{CombinationStrategyParams, SplitStrategyParams},
+        grid::params::{
+            CombinationStrategyParams, SplitStrategyParams,
+        },
         FittedModel,
     };
     use ndarray::s;
@@ -141,7 +143,7 @@ mod tests {
             .epochs(10)
             .n_iter(120) // Using default, but explicitly stated for clarity
             .n_trees(4)
-            .combination_strategy(CombinationStrategyParams::ArithmeticGeometricMean)
+            .combination_strategy(CombinationStrategyParams::ArithmeticGeometricMean(0.1))
             .reproject_grid_values(true)
             .split_strategy(SplitStrategyParams::RandomSplit {
                 split_try: 12,
@@ -151,6 +153,6 @@ mod tests {
 
         let (fit_result, _) = fit_boosted(x.view(), y.view(), &params);
         println!("Error: {:?}", fit_result.err);
-        assert!(fit_result.err < 0.7);
+        assert!(fit_result.err < 0.323);
     }
 }

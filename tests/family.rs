@@ -35,7 +35,7 @@ mod tests {
                 n_trees: 20,
                 bootstrap: false,
                 tg_params: TreeGridParams::default(),
-                combination_strategy: CombinationStrategyParams::Median,
+                combination_strategy: CombinationStrategyParams::Median(0.1),
             },
             &mut rng,
         );
@@ -56,7 +56,7 @@ mod tests {
                 n_trees: 20,
                 bootstrap: false,
                 tg_params: TreeGridParams::default(),
-                combination_strategy: CombinationStrategyParams::ArithmeticGeometricMean,
+                combination_strategy: CombinationStrategyParams::ArithmeticGeometricMean(0.1),
             },
             &mut rng,
         );
@@ -77,7 +77,7 @@ mod tests {
                 n_trees: 20,
                 bootstrap: false,
                 tg_params: TreeGridParams::default(),
-                combination_strategy: CombinationStrategyParams::ArithMean,
+                combination_strategy: CombinationStrategyParams::ArithMean(0.1),
             },
             &mut rng,
         );
@@ -98,7 +98,7 @@ mod tests {
                 n_trees: 20,
                 bootstrap: false,
                 tg_params: TreeGridParams::default(),
-                combination_strategy: CombinationStrategyParams::GeometricMean,
+                combination_strategy: CombinationStrategyParams::GeometricMean(0.1),
             },
             &mut rng,
         );

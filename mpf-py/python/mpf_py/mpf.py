@@ -134,19 +134,25 @@ class MPF:
             identification_strategy: str = "l2",
             combination_strategy: str = "arith_mean",
             reproject_grid_values: bool = True,
+            similarity_threshold: float = 0.0,
             seed: int = 42
         ) -> tuple["MPF.Boosted", "FitResult"]:
             split_strategy = SPLIT_STRATEGY_MAP[split_strategy]
             combination_strategy = int(COMBINATION_STRATEGY_MAP[combination_strategy])
             identification_strategy = int(IDENTIFICATION_STRATEGY_MAP[identification_strategy])
             mpf_boosted, fr = _MPFBoosted.fit(
-                x, y, 
-                epochs, n_trees, n_iter, split_try, 
+                x, 
+                y, 
+                epochs, 
+                n_trees,
+                n_iter,
+                split_try, 
                 colsample_bytree, 
                 split_strategy,
                 identification_strategy,
                 combination_strategy, 
                 reproject_grid_values,
+                similarity_threshold,
                 seed
             )
             instance = cls(mpf_boosted)
