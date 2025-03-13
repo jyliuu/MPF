@@ -1,5 +1,4 @@
-use std::ptr;
-
+use itertools::Itertools;
 use ndarray::ArrayView2;
 
 use crate::grid::{grid_index::GridIndex, FittedTreeGrid};
@@ -214,59 +213,6 @@ pub fn compute_inner_product(first: &FittedTreeGrid, second: &FittedTreeGrid, di
     inner_product
 }
 
-pub fn align_treegrid_to_reference_signs(
-    first: &FittedTreeGrid,
-    reference: &FittedTreeGrid,
-) -> Vec<f64> {
-    (0..first.grid_values.len())
-        .map(|dim| compute_inner_product(first, reference, dim).signum())
-        .collect()
-}
-
-pub fn get_aligned_signs_for_all_tree_grids(
-    tree_grids: &[FittedTreeGrid],
-    reference: &FittedTreeGrid,
-) -> Vec<Vec<f64>> {
-    let aligned_signs: Vec<Vec<f64>> = tree_grids
-        .iter()
-        .map(|grid| {
-            if ptr::eq(grid, reference) {
-                vec![1.0; grid.grid_values.len()]
-            } else {
-                align_treegrid_to_reference_signs(grid, reference)
-            }
-        })
-        .collect();
-
-    aligned_signs
-}
-
-pub fn compute_treegrid_to_reference_inner_products(
-    first: &FittedTreeGrid,
-    reference: &FittedTreeGrid,
-) -> Vec<f64> {
-    (0..first.grid_index.intervals.len())
-        .map(|dim| {
-            compute_inner_product_2_pointers(
-                &first.grid_index.observation_counts[dim],
-                &reference.grid_index.observation_counts[dim],
-                &first.grid_values[dim],
-                &reference.grid_values[dim],
-            )
-        })
-        .collect()
-}
-
-pub fn get_inner_products_for_all_tree_grids(
-    tree_grids: &[FittedTreeGrid],
-    reference: &FittedTreeGrid,
-) -> Vec<Vec<f64>> {
-    tree_grids
-        .iter()
-        .map(|grid| compute_treegrid_to_reference_inner_products(grid, reference))
-        .collect()
-}
-
 pub fn get_all_pairwise_inner_products(tree_grids: &[FittedTreeGrid]) -> Vec<Vec<Vec<f64>>> {
     let n = tree_grids.len();
     if n == 0 {
@@ -280,12 +226,7 @@ pub fn get_all_pairwise_inner_products(tree_grids: &[FittedTreeGrid]) -> Vec<Vec
     tree_grids.iter().enumerate().for_each(|(i, grid_i)| {
         // Diagonal elements (self inner products)
         for axis in 0..num_axes {
-            results[i][i][axis] = compute_inner_product_2_pointers(
-                &grid_i.grid_index.observation_counts[axis],
-                &grid_i.grid_index.observation_counts[axis],
-                &grid_i.grid_values[axis],
-                &grid_i.grid_values[axis],
-            );
+            results[i][i][axis] = 1.0;
         }
 
         // Upper triangle elements
@@ -350,39 +291,26 @@ where
         .unwrap();
     println!("Reference index: {}", reference_idx);
     println!("Threshold: {}", threshold);
-    let reference = &grids[reference_idx];
 
     // Existing filtering logic
-    let inner_products = get_inner_products_for_all_tree_grids(grids, reference);
-    let (grids, filtered_inner_products): (Vec<&FittedTreeGrid>, Vec<Vec<f64>>) = {
-        // Calculate scores for each grid
-        let mut scored_grids: Vec<(usize, f64)> = inner_products
-            .iter()
-            .enumerate()
-            .map(|(i, ips)| {
-                let score = ips
-                    .iter()
+    let keep_count = ((1.0 - similarity_threshold) * grids.len() as f64).round() as usize;
+    let inner_products = &pairwise_ips[reference_idx];
+    let (grids, filtered_inner_products): (Vec<&FittedTreeGrid>, Vec<Vec<f64>>) = inner_products
+        .iter()
+        .enumerate()
+        .map(|(i, ips)| {
+            (
+                i,
+                ips.iter()
                     .map(|v| v.abs())
                     .min_by(|a, b| a.partial_cmp(b).unwrap())
-                    .unwrap_or(0.0);
-                (i, score)
-            })
-            .collect();
-
-        // Sort by score descending
-        scored_grids.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-
-        // Calculate number to keep (top (1 - similarity_threshold)%)
-        let keep_count = ((1.0 - similarity_threshold) * grids.len() as f64).round() as usize;
-        let keep_count = keep_count.clamp(1, grids.len()); // Ensure at least 1
-
-        // Take top candidates
-        scored_grids
-            .into_iter()
-            .take(keep_count)
-            .map(|(i, _)| (&grids[i], inner_products[i].clone()))
-            .unzip()
-    };
+                    .unwrap_or(0.0),
+            )
+        })
+        .sorted_unstable_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap())
+        .take(keep_count)
+        .map(|(i, _)| (&grids[i], inner_products[i].clone()))
+        .unzip();
     println!("Candidate indices: {:?}", grids.len());
 
     let aligned_signs: Vec<Vec<f64>> = filtered_inner_products
@@ -390,7 +318,7 @@ where
         .map(|inner_products| inner_products.iter().map(|ip| ip.signum()).collect())
         .collect();
 
-    let num_axes = reference.grid_index.intervals.len();
+    let num_axes = grids[0].grid_index.intervals.len();
 
     let mut combined_splits: Vec<Vec<f64>> = Vec::with_capacity(num_axes);
     let mut combined_intervals: Vec<Vec<(f64, f64)>> = Vec::with_capacity(num_axes);
