@@ -1,6 +1,15 @@
 use crate::grid::params::{
-    CombinationStrategyParams, IdentificationStrategyParams, SplitStrategyParams, TreeGridParams, TreeGridParamsBuilder
+    IdentificationStrategyParams, SplitStrategyParams, TreeGridParams, TreeGridParamsBuilder,
 };
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CombinationStrategyParams {
+    ArithMean(f64),
+    Median(f64),
+    ArithmeticGeometricMean(f64),
+    GeometricMean(f64),
+    None,
+}
 
 #[derive(Debug, Clone)]
 pub struct TreeGridFamilyBoostedParams {

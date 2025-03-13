@@ -1,6 +1,8 @@
 use crate::{
-    family::params::{TreeGridFamilyBoostedParams, TreeGridFamilyBoostedParamsBuilder},
-    grid::params::{CombinationStrategyParams, IdentificationStrategyParams, SplitStrategyParams},
+    family::params::{
+        CombinationStrategyParams, TreeGridFamilyBoostedParams, TreeGridFamilyBoostedParamsBuilder,
+    },
+    grid::params::{IdentificationStrategyParams, SplitStrategyParams},
 };
 
 #[derive(Debug, Clone)]
@@ -59,10 +61,7 @@ impl MPFBoostedParamsBuilder {
         self
     }
 
-    pub fn combination_strategy(
-        mut self,
-        combination_strategy: CombinationStrategyParams,
-    ) -> Self {
+    pub fn combination_strategy(mut self, combination_strategy: CombinationStrategyParams) -> Self {
         self.tgf_params_builder = self
             .tgf_params_builder
             .combination_strategy(combination_strategy);

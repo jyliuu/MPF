@@ -4,10 +4,9 @@ mod test_data;
 mod tests {
     use super::test_data::setup_data_csv;
     use mpf::{
+        family::params::CombinationStrategyParams,
         forest::{fit_boosted, params::MPFBoostedParamsBuilder},
-        grid::params::{
-            CombinationStrategyParams, SplitStrategyParams,
-        },
+        grid::params::SplitStrategyParams,
         FittedModel,
     };
     use ndarray::s;

@@ -4,8 +4,11 @@ mod test_data;
 mod tests {
     use super::test_data::setup_data_csv;
     use mpf::{
-        family::{fit, params::TreeGridFamilyBoostedParams},
-        grid::params::{CombinationStrategyParams, TreeGridParams},
+        family::{
+            fit,
+            params::{CombinationStrategyParams, TreeGridFamilyBoostedParams},
+        },
+        grid::params::TreeGridParams,
         FittedModel,
     };
     use rand::{rngs::StdRng, SeedableRng};

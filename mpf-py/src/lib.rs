@@ -7,11 +7,11 @@ use std::ops::{Deref, DerefMut};
 use numpy::{PyArray1, ToPyArray};
 
 use mpf::{
-    family::{BoostedVariant, TreeGridFamily},
+    family::{params::CombinationStrategyParams, BoostedVariant, TreeGridFamily},
     forest::{fit_boosted, params::MPFBoostedParamsBuilder, MPF},
     grid::{
         self,
-        params::{CombinationStrategyParams, IdentificationStrategyParams, SplitStrategyParams},
+        params::{IdentificationStrategyParams, SplitStrategyParams},
         FittedTreeGrid, TreeGridParamsBuilder,
     },
     FitResult, FittedModel,

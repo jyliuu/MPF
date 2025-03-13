@@ -2,12 +2,16 @@ use ndarray::{ArrayView1, ArrayView2};
 use rand::{Rng, SeedableRng};
 
 use crate::{
-    grid::{self, params::CombinationStrategyParams},
+    grid::{self},
     FitResult, FittedModel,
 };
 
-use super::combine_grids::{
-    combine_into_single_tree_grid, ArithmeticGeometricMean, ArithmeticMean, GeometricMean, Median,
+use super::{
+    combine_grids::{
+        combine_into_single_tree_grid, ArithmeticGeometricMean, ArithmeticMean, GeometricMean,
+        Median,
+    },
+    params::CombinationStrategyParams,
 };
 use super::{params::TreeGridFamilyBoostedParams, BoostedVariant, FittedTreeGrid, TreeGridFamily};
 
@@ -69,7 +73,6 @@ pub fn fit<R: Rng + ?Sized>(
         })
         .collect();
 
-
     let combined_tree_grid = match *combination_strategy {
         CombinationStrategyParams::ArithMean(similarity_threshold) => {
             Some(combine_into_single_tree_grid::<ArithmeticMean>(
@@ -78,13 +81,9 @@ pub fn fit<R: Rng + ?Sized>(
                 similarity_threshold,
             ))
         }
-        CombinationStrategyParams::Median(similarity_threshold) => {
-            Some(combine_into_single_tree_grid::<Median>(
-                &tree_grids,
-                x.view(),
-                similarity_threshold,
-            ))
-        }
+        CombinationStrategyParams::Median(similarity_threshold) => Some(
+            combine_into_single_tree_grid::<Median>(&tree_grids, x.view(), similarity_threshold),
+        ),
         CombinationStrategyParams::ArithmeticGeometricMean(similarity_threshold) => {
             Some(combine_into_single_tree_grid::<ArithmeticGeometricMean>(
                 &tree_grids,
