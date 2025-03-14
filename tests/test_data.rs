@@ -2,11 +2,15 @@ use csv::ReaderBuilder;
 use ndarray::{Array1, Array2};
 
 #[allow(dead_code)]
-pub fn setup_data_housing_csv() -> (Array2<f64>, Array1<f64>) {
+pub fn setup_data_housing_csv(full: bool) -> (Array2<f64>, Array1<f64>) {
     // Reads data from file "data/housing.csv" and makes median_house_value (last column) the response (y)
     let mut rdr = ReaderBuilder::new()
         .has_headers(false)
-        .from_path("./data/housing.csv")
+        .from_path(if full {
+            "./data/housing_full.csv"
+        } else {
+            "./data/housing.csv"
+        })
         .expect("Failed to open file");
 
     let mut x_data_: Vec<Vec<f64>> = Vec::new();

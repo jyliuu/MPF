@@ -242,71 +242,22 @@ impl GridIndex {
     }
 
     pub fn collect_fixed_axis_cells(&self, fixed_axis: usize, fixed_index: usize) -> Vec<usize> {
-        // A recursive helper function that builds multi-dimensional indices.
-        // This function is used to collect all cell_idx for a fixed axis and index.
-        // IMPORTANT: This function returns a list of cell_idx, not point_idx!
-        let p = self.boundaries.len();
         let dims = self.current_dims();
-        let strides = &self.strides;
-        let mut result = Vec::new();
-
-        fn recurse(
-            current_dim: usize,
-            dims: &[usize],
-            strides: &[usize],
-            fixed_axis: usize,
-            fixed_index: usize,
-            current_flat: usize,
-            current_indices: &mut Vec<usize>,
-            result: &mut Vec<usize>,
-        ) {
-            if current_dim == dims.len() {
-                result.push(current_flat);
-                return;
-            }
-            if current_dim == fixed_axis {
-                current_indices.push(fixed_index);
-                recurse(
-                    current_dim + 1,
-                    dims,
-                    strides,
-                    fixed_axis,
-                    fixed_index,
-                    current_flat + fixed_index * strides[current_dim],
-                    current_indices,
-                    result,
-                );
-                current_indices.pop();
-            } else {
-                for i in 0..dims[current_dim] {
-                    current_indices.push(i);
-                    recurse(
-                        current_dim + 1,
-                        dims,
-                        strides,
-                        fixed_axis,
-                        fixed_index,
-                        current_flat + i * strides[current_dim],
-                        current_indices,
-                        result,
-                    );
-                    current_indices.pop();
-                }
-            }
+        if fixed_axis >= dims.len() || fixed_index >= dims[fixed_axis] {
+            return Vec::new();
         }
 
-        recurse(
-            0,
-            &dims,
-            strides,
-            fixed_axis,
-            fixed_index,
-            0,
-            &mut Vec::with_capacity(p),
-            &mut result,
-        );
-        result.retain(|cell| self.cells.contains_key(cell));
-        result
+        let s_fixed = self.strides[fixed_axis];
+        let d_fixed = dims[fixed_axis];
+
+        self.cells
+            .keys()
+            .filter(|&&cell| {
+                let quotient = cell / s_fixed;
+                (quotient % d_fixed) == fixed_index
+            })
+            .copied()
+            .collect()
     }
 
     pub fn get_cartesian_coordinates(&self, flat_index: usize) -> Vec<usize> {

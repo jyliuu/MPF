@@ -6,9 +6,11 @@ mod tests {
     use mpf::{
         family::{
             fit,
-            params::{CombinationStrategyParams, TreeGridFamilyBoostedParams},
+            params::{
+                CombinationStrategyParams, TreeGridFamilyBoostedParams,
+                TreeGridFamilyBoostedParamsBuilder,
+            },
         },
-        grid::params::TreeGridParams,
         FittedModel,
     };
     use rand::{rngs::StdRng, SeedableRng};
@@ -31,17 +33,12 @@ mod tests {
     fn test_l2_median_combined_tree_grid_predicts_well() {
         let (x, y) = setup_data_csv();
         let mut rng = StdRng::seed_from_u64(42);
-        let (_, tgf) = fit(
-            x.view(),
-            y.view(),
-            &TreeGridFamilyBoostedParams {
-                n_trees: 20,
-                bootstrap: false,
-                tg_params: TreeGridParams::default(),
-                combination_strategy: CombinationStrategyParams::Median(0.1),
-            },
-            &mut rng,
-        );
+        let hyperparameters = TreeGridFamilyBoostedParamsBuilder::new()
+            .n_trees(20)
+            .bootstrap(false)
+            .combination_strategy(CombinationStrategyParams::Median(0.1))
+            .build();
+        let (_, tgf) = fit(x.view(), y.view(), &hyperparameters, &mut rng);
         let pred = tgf.predict(x.view());
         let err = (y - pred).powi(2).mean().unwrap();
         println!("err: {:?}", err);
@@ -52,17 +49,12 @@ mod tests {
     fn test_l2_arith_geom_mean_combined_tree_grid_predicts_well() {
         let (x, y) = setup_data_csv();
         let mut rng = StdRng::seed_from_u64(42);
-        let (_, tgf) = fit(
-            x.view(),
-            y.view(),
-            &TreeGridFamilyBoostedParams {
-                n_trees: 20,
-                bootstrap: false,
-                tg_params: TreeGridParams::default(),
-                combination_strategy: CombinationStrategyParams::ArithmeticGeometricMean(0.1),
-            },
-            &mut rng,
-        );
+        let hyperparameters = TreeGridFamilyBoostedParamsBuilder::new()
+            .n_trees(20)
+            .bootstrap(false)
+            .combination_strategy(CombinationStrategyParams::ArithmeticGeometricMean(0.1))
+            .build();
+        let (_, tgf) = fit(x.view(), y.view(), &hyperparameters, &mut rng);
         let pred = tgf.predict(x.view());
         let err = (y - pred).powi(2).mean().unwrap();
         println!("err: {:?}", err);
@@ -73,17 +65,12 @@ mod tests {
     fn test_l2_arith_mean_combined_tree_grid_predicts_well() {
         let (x, y) = setup_data_csv();
         let mut rng = StdRng::seed_from_u64(42);
-        let (_, tgf) = fit(
-            x.view(),
-            y.view(),
-            &TreeGridFamilyBoostedParams {
-                n_trees: 20,
-                bootstrap: false,
-                tg_params: TreeGridParams::default(),
-                combination_strategy: CombinationStrategyParams::ArithMean(0.1),
-            },
-            &mut rng,
-        );
+        let hyperparameters = TreeGridFamilyBoostedParamsBuilder::new()
+            .n_trees(20)
+            .bootstrap(false)
+            .combination_strategy(CombinationStrategyParams::ArithMean(0.1))
+            .build();
+        let (_, tgf) = fit(x.view(), y.view(), &hyperparameters, &mut rng);
         let pred = tgf.predict(x.view());
         let err = (y - pred).powi(2).mean().unwrap();
         println!("err: {:?}", err);
@@ -94,17 +81,12 @@ mod tests {
     fn test_l2_geom_mean_combined_tree_grid_predicts_well() {
         let (x, y) = setup_data_csv();
         let mut rng = StdRng::seed_from_u64(42);
-        let (_, tgf) = fit(
-            x.view(),
-            y.view(),
-            &TreeGridFamilyBoostedParams {
-                n_trees: 20,
-                bootstrap: false,
-                tg_params: TreeGridParams::default(),
-                combination_strategy: CombinationStrategyParams::GeometricMean(0.1),
-            },
-            &mut rng,
-        );
+        let hyperparameters = TreeGridFamilyBoostedParamsBuilder::new()
+            .n_trees(20)
+            .bootstrap(false)
+            .combination_strategy(CombinationStrategyParams::GeometricMean(0.1))
+            .build();
+        let (_, tgf) = fit(x.view(), y.view(), &hyperparameters, &mut rng);
         let pred = tgf.predict(x.view());
         let err = (y - pred).powi(2).mean().unwrap();
         println!("err: {:?}", err);

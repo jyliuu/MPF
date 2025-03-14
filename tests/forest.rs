@@ -28,6 +28,7 @@ mod tests {
             .n_trees(5)
             .n_iter(25)
             .seed(42)
+            .optimize_scaling(true)
             .build();
         let (fit_result, mpf) = fit_boosted(x_train, y_train, &params);
         let mean = y_test.mean().unwrap();
@@ -136,14 +137,15 @@ mod tests {
     fn test_mpf_housing() {
         use crate::test_data::setup_data_housing_csv;
 
-        let (x, y) = setup_data_housing_csv();
+        let (x, y) = setup_data_housing_csv(true);
         // Use builder pattern for cleaner parameter construction
         let params = MPFBoostedParamsBuilder::new()
             .epochs(10)
-            .n_iter(120) // Using default, but explicitly stated for clarity
-            .n_trees(4)
-            .combination_strategy(CombinationStrategyParams::ArithmeticGeometricMean(0.1))
+            .n_iter(100) // Using default, but explicitly stated for clarity
+            .n_trees(1)
+            .combination_strategy(CombinationStrategyParams::None)
             .reproject_grid_values(true)
+            .optimize_scaling(true)
             .split_strategy(SplitStrategyParams::RandomSplit {
                 split_try: 12,
                 colsample_bytree: 1.0,
@@ -152,6 +154,6 @@ mod tests {
 
         let (fit_result, _) = fit_boosted(x.view(), y.view(), &params);
         println!("Error: {:?}", fit_result.err);
-        assert!(fit_result.err < 0.323);
+        assert!(fit_result.err < 0.28);
     }
 }

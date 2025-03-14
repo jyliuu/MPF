@@ -1,5 +1,6 @@
 use ndarray::{Array1, ArrayView1, ArrayView2};
 use rand::Rng;
+use std::collections::HashMap;
 
 use crate::FitResult;
 
@@ -85,23 +86,20 @@ pub struct TreeGridFitter<'a> {
 }
 
 impl TreeGridFitter<'_> {
-    pub fn update_tree(&mut self, refine_candidate: RefineCandidate) {
+    pub fn update_tree(&mut self, refine_candidate: RefineCandidate, cells: &[usize]) {
         let RefineCandidate {
             col,
             split,
             index,
             update_a,
             update_b,
-            cells,
         } = refine_candidate;
 
         let old_grid_value = self.grid_values[col][index];
         self.grid_values[col][index] *= update_a;
         self.grid_values[col].insert(index + 1, old_grid_value * update_b);
 
-        let (pos_a, pos_b) = self
-            .grid_index
-            .split_axis(&cells, col, split, self.x.view());
+        let (pos_a, pos_b) = self.grid_index.split_axis(cells, col, split, self.x.view());
 
         let left_grid_cells = self.grid_index.collect_fixed_axis_cells(col, pos_a);
         let right_grid_cells = self.grid_index.collect_fixed_axis_cells(col, pos_b);
@@ -157,40 +155,71 @@ impl<'a> TreeGridFitter<'a> {
         R: Rng + ?Sized,
     {
         // Main fitting loop
-        for _ in 0..n_iter {
+        for iter in 0..n_iter {
             let intervals = &self.grid_index.intervals;
 
             let splits = split_strategy.sample_splits(rng, self.x.view(), intervals);
 
-            // Select best candidate based on strategy
-            let best_candidate = {
-                let mut best_candidate = None;
-                let mut best_err_diff = f64::NEG_INFINITY;
+            // Group splits into buckets by (col, col_index)
+            let mut split_buckets: HashMap<(usize, usize), Vec<f64>> = HashMap::new();
+            for (col, split) in splits {
+                let col_index = self.grid_index.compute_col_index_for_point(col, split);
+                split_buckets
+                    .entry((col, col_index))
+                    .or_default()
+                    .push(split);
+            }
 
-                for (col, split) in splits {
+            // Process each bucket
+            let mut best_candidate = None;
+            let mut best_err_diff = f64::NEG_INFINITY;
+
+            for ((col, col_index), splits) in split_buckets {
+                // Get cells once per bucket
+                let cell_indices = self.grid_index.collect_fixed_axis_cells(col, col_index);
+                let cell_points = cell_indices
+                    .iter()
+                    .map(|i| self.grid_index.cells.get(i).unwrap())
+                    .collect::<Vec<_>>();
+
+                let mut found_best_candidate_in_bucket = None;
+
+                // Process all splits in this bucket
+                for split in splits {
                     let refine_candidate_res = find_refine_candidate(
-                        split,
                         col,
-                        &self.grid_index,
+                        split,
+                        &cell_points,
                         self.residuals.view(),
                         self.y_hat.view(),
                         self.x.view(),
                     );
-                    if let Ok((err_new, err_old, refine_candidate)) = refine_candidate_res {
+
+                    if let Ok((err_new, err_old, update_a, update_b)) = refine_candidate_res {
                         let err_diff = err_old - err_new;
                         if err_diff > best_err_diff {
-                            best_candidate = Some(refine_candidate);
+                            let refine_candidate = RefineCandidate {
+                                col,
+                                split,
+                                index: col_index,
+                                update_a,
+                                update_b,
+                            };
+
+                            found_best_candidate_in_bucket = Some(refine_candidate);
                             best_err_diff = err_diff;
                         }
                     }
                 }
 
-                best_candidate
-            };
+                if let Some(candidate) = found_best_candidate_in_bucket {
+                    best_candidate = Some((candidate, cell_indices));
+                }
+            }
 
             // Update tree with best candidate
-            if let Some(candidate) = best_candidate {
-                self.update_tree(candidate);
+            if let Some((candidate, cells)) = best_candidate {
+                self.update_tree(candidate, &cells);
             }
         }
 
@@ -227,28 +256,22 @@ pub struct RefineCandidate {
     pub index: usize,
     pub update_a: f64,
     pub update_b: f64,
-    pub cells: Vec<usize>,
 }
 
 pub fn find_refine_candidate(
-    split: f64,
     col: usize,
-    grid_index: &GridIndex,
+    split: f64,
+    cell_points: &[&Vec<usize>],
     residuals: ArrayView1<'_, f64>,
     y_hat: ArrayView1<'_, f64>,
     x: ArrayView2<'_, f64>,
-) -> Result<(f64, f64, RefineCandidate), String> {
-    let index = grid_index.compute_col_index_for_point(col, split);
-    let cells = grid_index.collect_fixed_axis_cells(col, index);
-
+) -> Result<(f64, f64, f64, f64), String> {
     // Initialize accumulators
     let (mut n_a, mut n_b) = (0.0, 0.0);
     let (mut m_a, mut m_b) = (0.0, 0.0);
     let mut err_old = 0.0;
     // Single pass through data
-    for cell_idx in &cells {
-        let points = grid_index.cells.get(cell_idx).unwrap();
-
+    for &points in cell_points {
         // The value of one observation is the same for all points in the cell
         if let Some(v) = y_hat.get(points[0]) {
             let v_pow2 = v.powi(2);
@@ -281,18 +304,7 @@ pub fn find_refine_candidate(
     let update_a = m_a / n_a + 1.0;
     let update_b = m_b / n_b + 1.0;
 
-    Ok((
-        err_new,
-        err_old,
-        RefineCandidate {
-            col,
-            split,
-            index,
-            update_a,
-            update_b,
-            cells,
-        },
-    ))
+    Ok((err_new, err_old, update_a, update_b))
 }
 
 #[cfg(test)]
@@ -381,19 +393,49 @@ mod tests {
         };
     }
 
-    #[test]
-    fn test_tree_grid_slice_refine_candidate() {
-        let (x, y) = setup_data_hardcoded();
-        let tree_grid = TreeGridFitter::new(x.view(), y.view());
-        let (_, _, refine_candidate) = find_refine_candidate(
-            1.0,
-            0,
-            &tree_grid.grid_index,
+    fn find_refine_candidate_closure(
+        tree_grid: &TreeGridFitter<'_>,
+        x: ArrayView2<'_, f64>,
+        split: f64,
+        col: usize,
+    ) -> (f64, f64, RefineCandidate, Vec<usize>) {
+        let col_index = tree_grid.grid_index.compute_col_index_for_point(col, split);
+        let cells = tree_grid
+            .grid_index
+            .collect_fixed_axis_cells(col, col_index);
+        let cell_points = cells
+            .iter()
+            .map(|i| tree_grid.grid_index.cells.get(i).unwrap())
+            .collect::<Vec<_>>();
+        let (err_new, err_old, update_a, update_b) = find_refine_candidate(
+            col,
+            split,
+            &cell_points,
             tree_grid.residuals.view(),
             tree_grid.y_hat.view(),
             x.view(),
         )
         .unwrap();
+        (
+            err_new,
+            err_old,
+            RefineCandidate {
+                col,
+                split,
+                index: col_index,
+                update_a,
+                update_b,
+            },
+            cells,
+        )
+    }
+
+    #[test]
+    fn test_tree_grid_slice_refine_candidate() {
+        let (x, y) = setup_data_hardcoded();
+        let tree_grid = TreeGridFitter::new(x.view(), y.view());
+        let (_, _, refine_candidate, cells) =
+            find_refine_candidate_closure(&tree_grid, x.view(), 1.0, 0);
         assert_float_eq!(refine_candidate.update_a, -93.53056943616252, 1e-10);
         assert_float_eq!(refine_candidate.update_b, 379.12227774465015, 1e-10);
     }
@@ -401,112 +443,101 @@ mod tests {
     #[test]
     fn test_tree_grid_multiple_refines() {
         let (x, y) = setup_data_hardcoded();
-        let find_refine_candidate_closure =
-            |tree_grid: &TreeGridFitter<'_>, split, col| -> (f64, f64, RefineCandidate) {
-                find_refine_candidate(
-                    split,
-                    col,
-                    &tree_grid.grid_index,
-                    tree_grid.residuals.view(),
-                    tree_grid.y_hat.view(),
-                    x.view(),
-                )
-                .unwrap()
-            };
+
         let mut tree_grid = TreeGridFitter::new(x.view(), y.view());
         {
-            let (err_new, err_old, refine_candidate) =
-                find_refine_candidate_closure(&tree_grid, x[[8, 0]], 0);
+            let (err_new, err_old, refine_candidate, cells) =
+                find_refine_candidate_closure(&tree_grid, x.view(), x[[8, 0]], 0);
 
             assert_float_eq!(err_new, 26.61921453887834, 1e-10);
             assert_float_eq!(err_old, 39.65496224200821, 1e-10);
             assert_float_eq!(refine_candidate.update_a, -81.09657885629389, 1e-10);
             assert_float_eq!(refine_candidate.update_b, 739.869209706645, 1e-10);
-            tree_grid.update_tree(refine_candidate);
+            tree_grid.update_tree(refine_candidate, &cells);
             assert_eq!(
                 tree_grid.grid_index.observation_counts,
                 vec![vec![18, 2], vec![20]]
             )
         }
         {
-            let (err_new, err_old, refine_candidate) =
-                find_refine_candidate_closure(&tree_grid, x[[12, 0]], 0);
+            let (err_new, err_old, refine_candidate, cells) =
+                find_refine_candidate_closure(&tree_grid, x.view(), x[[12, 0]], 0);
 
             assert_float_eq!(err_new, 22.425727245741378, 1e-10);
             assert_float_eq!(err_old, 26.153854021633833, 1e-10);
             assert_float_eq!(refine_candidate.update_a, 8.058693908258093, 1e-10);
             assert_float_eq!(refine_candidate.update_b, 0.5847827112789354, 1e-10);
-            tree_grid.update_tree(refine_candidate);
+            tree_grid.update_tree(refine_candidate, &cells);
             assert_eq!(
                 tree_grid.grid_index.observation_counts,
                 vec![vec![1, 17, 2], vec![20]]
             );
         }
         {
-            let (err_new, err_old, refine_candidate) =
-                find_refine_candidate_closure(&tree_grid, x[[0, 0]], 0);
+            let (err_new, err_old, refine_candidate, cells) =
+                find_refine_candidate_closure(&tree_grid, x.view(), x[[0, 0]], 0);
 
             assert_float_eq!(err_new, 14.671443409333211, 1e-10);
             assert_float_eq!(err_old, 22.425727245741378, 1e-10);
             assert_float_eq!(refine_candidate.update_a, -6.832210436114132, 1e-10);
             assert_float_eq!(refine_candidate.update_b, 3.409910903419733, 1e-10);
-            tree_grid.update_tree(refine_candidate);
+            tree_grid.update_tree(refine_candidate, &cells);
             assert_eq!(
                 tree_grid.grid_index.observation_counts,
                 vec![vec![1, 4, 13, 2], vec![20]]
             );
         }
         {
-            let (err_new, err_old, refine_candidate) =
-                find_refine_candidate_closure(&tree_grid, x[[15, 1]], 1);
+            let (err_new, err_old, refine_candidate, cells) =
+                find_refine_candidate_closure(&tree_grid, x.view(), x[[15, 1]], 1);
 
             assert_float_eq!(err_new, 11.248401175931308, 1e-10);
             assert_float_eq!(err_old, 15.136803926577713, 1e-10);
             assert_float_eq!(refine_candidate.update_a, 0.8256919200067316, 1e-10);
             assert_float_eq!(refine_candidate.update_b, 1.9098338089112117, 1e-10);
-            tree_grid.update_tree(refine_candidate);
+            tree_grid.update_tree(refine_candidate, &cells);
             assert_eq!(
                 tree_grid.grid_index.observation_counts,
                 vec![vec![1, 4, 13, 2], vec![12, 8]]
             );
         }
         {
-            let (err_new, err_old, refine_candidate) =
-                find_refine_candidate_closure(&tree_grid, x[[6, 1]], 1);
+            let (err_new, err_old, refine_candidate, cells) =
+                find_refine_candidate_closure(&tree_grid, x.view(), x[[6, 1]], 1);
 
             assert_float_eq!(err_new, 3.9199063400989016, 1e-10);
             assert_float_eq!(err_old, 7.692086523143316, 1e-10);
             assert_float_eq!(refine_candidate.update_a, 1.2412453820291502, 1e-10);
             assert_float_eq!(refine_candidate.update_b, -0.11462749920417181, 1e-10);
-            tree_grid.update_tree(refine_candidate);
+            tree_grid.update_tree(refine_candidate, &cells);
             assert_eq!(
                 tree_grid.grid_index.observation_counts,
                 vec![vec![1, 4, 13, 2], vec![5, 7, 8]]
             );
         }
         {
-            let (err_new, err_old, refine_candidate) =
-                find_refine_candidate_closure(&tree_grid, x[[13, 0]], 0);
+            let (err_new, err_old, refine_candidate, cells) =
+                find_refine_candidate_closure(&tree_grid, x.view(), x[[13, 0]], 0);
 
             assert_float_eq!(err_new, 3.5819148122645306, 1e-10);
             assert_float_eq!(err_old, 6.104930626516536, 1e-10);
             assert_float_eq!(refine_candidate.update_a, 3.691670930826113, 1e-10);
             assert_float_eq!(refine_candidate.update_b, 0.7617522326677412, 1e-10);
-            tree_grid.update_tree(refine_candidate);
+            tree_grid.update_tree(refine_candidate, &cells);
             assert_eq!(
                 tree_grid.grid_index.observation_counts,
                 vec![vec![1, 4, 2, 11, 2], vec![5, 7, 8]]
             );
         }
         {
-            let (err_new, err_old, refine_candidate) =
-                find_refine_candidate_closure(&tree_grid, x[[14, 0]], 0);
+            let (err_new, err_old, refine_candidate, cells) =
+                find_refine_candidate_closure(&tree_grid, x.view(), x[[14, 0]], 0);
 
             assert_float_eq!(err_new, 1.1863917023933575, 1e-10);
             assert_float_eq!(err_old, 3.5708191124576096, 1e-10);
             assert_float_eq!(refine_candidate.update_a, 0.6518311983217222, 1e-10);
             assert_float_eq!(refine_candidate.update_b, 2.828492111820738, 1e-10);
-            tree_grid.update_tree(refine_candidate);
+            tree_grid.update_tree(refine_candidate, &cells);
             assert_eq!(
                 tree_grid.grid_index.observation_counts,
                 vec![vec![1, 4, 2, 7, 4, 2], vec![5, 7, 8]]
