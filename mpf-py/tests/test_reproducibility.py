@@ -21,7 +21,6 @@ def test_mpf_boosted_reproducibility():
         n_iter=10,
         split_try=5,
         colsample_bytree=1.0,
-        identified=True,
         seed=42
     )
     
@@ -33,7 +32,6 @@ def test_mpf_boosted_reproducibility():
         n_iter=10,
         split_try=5,
         colsample_bytree=1.0,
-        identified=True,
         seed=42
     )
     # Generate predictions
@@ -58,7 +56,6 @@ def test_different_seeds_produce_different_results():
         n_iter=10,
         split_try=5,
         colsample_bytree=1.0,
-        identified=True,
         seed=42
     )
     
@@ -69,7 +66,6 @@ def test_different_seeds_produce_different_results():
         n_iter=10,
         split_try=5,
         colsample_bytree=1.0,
-        identified=True,
         seed=43
     )
     

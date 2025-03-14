@@ -25,7 +25,7 @@ def test_tree_grid_fit(training_data, test_data):
     X_test, y_test = test_data
 
     # Train the MPF estimator
-    tg, fr = TreeGrid.fit(X, y, n_iter=100, split_try=15, colsample_bytree=1.0, identified=True)
+    tg, fr = TreeGrid.fit(X, y, n_iter=100, split_try=15, colsample_bytree=1.0)
 
     print("Fit result: ", fr)
     # MPF predictions and loss
@@ -50,7 +50,7 @@ def test_mpf_boosted_fit(training_data, test_data):
     X_test, y_test = test_data
 
     # Train the MPF estimator
-    mpf, fr = MPF.Boosted.fit(X, y, epochs=3, n_trees=37, n_iter=30, split_try=16, colsample_bytree=1.0, identified=True)
+    mpf, fr = MPF.Boosted.fit(X, y, epochs=3, n_trees=37, n_iter=30, split_try=16, colsample_bytree=1.0)
 
     print("Fit result: ", fr)
     # MPF predictions and loss
